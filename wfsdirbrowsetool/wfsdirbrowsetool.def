@@ -1,0 +1,6 @@
+LIBRARY "wfsdirbrowsetool"
+
+EXPORTS
+	ExtraDialog
+	CreateDirectoryBrowseTool
+	InitDirectoryBrowseTool

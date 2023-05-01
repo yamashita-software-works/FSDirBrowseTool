@@ -1,0 +1,7 @@
+DIRS=\
+	libcwh\
+	libmisc\
+	libntwdk\
+	wfslib\
+	wfsdirbrowsetool\
+	wfsdirbrowse.mdi

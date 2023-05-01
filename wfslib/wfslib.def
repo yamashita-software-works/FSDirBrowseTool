@@ -1,0 +1,13 @@
+LIBRARY "wfslib"
+
+EXPORTS
+	NtPathIsNtDevicePath
+	NtPathGetVolumeName	
+	NtPathGetRootDirectory
+	NtPathFileExists
+	_StringFromGUID
+	_IsRootDirectory
+	_HasPrefix
+	NtStatusToDosError = ntdll.RtlNtStatusToDosError
+	NtStatusToWin32Error = ntdll.RtlNtStatusToDosError
+
