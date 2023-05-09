@@ -19,7 +19,6 @@
 #include "fileinfo.h"
 #include "libntwdk.h"
 #include "..\libntwdk\ntnativeapi.h"
-//#include "..\libntwdk\ntnativehelp.h"
 #include "builddefs.h"
 
 #if _ENABLE_USE_FSLIB
@@ -103,9 +102,7 @@ _DeviceIoControl(
 	)
 {
 	NTSTATUS Status;
-	IO_STATUS_BLOCK IoStatus;
-
-	RtlZeroMemory(&IoStatus,sizeof(IoStatus));
+	IO_STATUS_BLOCK IoStatus = {0};
 
 	Status = NtFsControlFile(FileHandle,NULL,NULL,NULL,&IoStatus,
 						FsControlCode,
@@ -372,6 +369,332 @@ GetEAInformation(
 
 //----------------------------------------------------------------------------
 //
+//  GetReparsePointInformation()
+//
+//  PURPOSE:
+//
+//----------------------------------------------------------------------------
+PRIVATE
+BOOLEAN
+APIENTRY
+FreeReparsePointInformation(
+	PVOID InformationBuffer
+	)
+{
+	if( InformationBuffer == NULL )
+		return false;
+
+	FS_REPARSE_POINT_INFORMATION_EX *pInfo = (FS_REPARSE_POINT_INFORMATION_EX *)InformationBuffer;
+
+	switch( pInfo->ReparseTag )
+	{
+		case IO_REPARSE_TAG_MOUNT_POINT:
+			FreeMemory(pInfo->MountPoint.PrintPath);
+			FreeMemory(pInfo->MountPoint.TargetPath);
+			pInfo->MountPoint.PrintPath = NULL;
+			pInfo->MountPoint.TargetPath = NULL;
+			break;
+		case IO_REPARSE_TAG_SYMLINK:
+			FreeMemory(pInfo->SymLink.PrintPath);
+			FreeMemory(pInfo->SymLink.TargetPath);
+			pInfo->SymLink.PrintPath = NULL;
+			pInfo->SymLink.TargetPath = NULL;
+			break;
+		case IO_REPARSE_TAG_APPEXECLINK:
+			FreeMemory(pInfo->AppExecLink.Buffer);
+			memset(&pInfo->AppExecLink,0,sizeof(pInfo->AppExecLink));
+			break;
+		default:
+			FreeMemory(pInfo->GenericReparse.Buffer);
+			pInfo->GenericReparse.Buffer = NULL;
+			break;		
+	}
+
+	pInfo->ReparseTag = 0;
+	pInfo->ReparseDataLength = 0;
+	pInfo->Flags = 0;
+
+	return true;
+}
+
+//----------------------------------------------------------------------------
+//
+//  GetReparsePointInformation()
+//
+//  PURPOSE:
+//
+//----------------------------------------------------------------------------
+PRIVATE
+BOOLEAN
+APIENTRY
+GetReparsePointInformation(
+	HANDLE hRoot,
+	PCWSTR FilePath,
+	PVOID InformationStruct,
+	ULONG InformationStructLength,
+	ULONG Flags
+	)
+{
+	BOOLEAN bSuccess = FALSE;
+	HANDLE hFile;
+
+	if( FilePath != NULL )
+	{
+		NTSTATUS Status;
+		UNICODE_STRING ustrPath;
+		RtlInitUnicodeString(&ustrPath,FilePath);
+		Status = OpenFile_U(&hFile,hRoot,&ustrPath,
+					FILE_READ_ATTRIBUTES|SYNCHRONIZE,FILE_SHARE_READ|FILE_SHARE_WRITE,
+					FILE_OPEN_REPARSE_POINT|FILE_OPEN_FOR_BACKUP_INTENT);
+		if( Status != STATUS_SUCCESS )
+		{
+			RtlSetLastWin32Error( RtlNtStatusToDosError(STATUS_INVALID_PARAMETER) );
+			return FALSE;
+		}
+	}
+	else if( hRoot != NULL && FilePath == NULL )
+	{
+		hFile = hRoot;
+	}
+	else
+	{
+		RtlSetLastWin32Error( RtlNtStatusToDosError(STATUS_INVALID_PARAMETER) );
+		return FALSE;
+	}
+
+	ULONG cbDataLength = sizeof(REPARSE_DATA_BUFFER) + _NT_PATH_FULL_LENGTH_BYTES;
+	REPARSE_DATA_BUFFER *pBuffer = (REPARSE_DATA_BUFFER *)AllocMemory( cbDataLength );
+
+	if( pBuffer != NULL && hFile != INVALID_HANDLE_VALUE )
+	{
+		DWORD cb = 0;
+		for(;;)
+		{
+	        bSuccess = _DeviceIoControl(hFile,
+							FSCTL_GET_REPARSE_POINT,
+							NULL,0,
+							pBuffer,cbDataLength,
+							&cb);
+			if( bSuccess )
+			{
+				if( cb != 0 && (cb < cbDataLength) )
+				{
+					pBuffer = (REPARSE_DATA_BUFFER *)ReallocMemory(pBuffer,cb); // buffer shrink
+					cbDataLength = cb;
+				}
+				break;
+			}
+
+			if( RtlGetLastWin32Error() == STATUS_BUFFER_TOO_SMALL )
+			{
+				cbDataLength += _NT_PATH_FULL_LENGTH_BYTES;
+				pBuffer = (REPARSE_DATA_BUFFER *)ReallocMemory(pBuffer,cbDataLength);
+				if( pBuffer == NULL )
+					break;
+			}
+			else
+			{
+				break; // fatal error
+			}
+		}
+	}
+
+	if( FilePath != NULL && hFile != INVALID_HANDLE_VALUE )
+		NtClose(hFile);
+
+	if( pBuffer == NULL )
+	{
+		_SetLastWin32Error( ERROR_NOT_ENOUGH_MEMORY );
+		bSuccess = FALSE;
+	}
+
+	//
+	// Parse ReparsePoint Type
+	//
+	if( bSuccess )
+	{
+		FS_REPARSE_POINT_INFORMATION_EX *pInfo = (FS_REPARSE_POINT_INFORMATION_EX *)InformationStruct;
+		WCHAR *pName;
+		ULONG Result = 0;
+		SIZE_T cbNameSize;
+
+		pInfo->ReparseTag = pBuffer->ReparseTag;
+		pInfo->ReparseDataLength = pBuffer->ReparseDataLength;
+		pInfo->Reserved = pBuffer->Reserved;
+
+		switch( pBuffer->ReparseTag )
+		{
+			case IO_REPARSE_TAG_MOUNT_POINT:
+			{
+				// Get target path
+				if( pInfo->MountPoint.TargetPath == NULL )
+				{
+					cbNameSize = pBuffer->MountPointReparseBuffer.SubstituteNameLength;
+					pName = (pBuffer->MountPointReparseBuffer.PathBuffer + (pBuffer->MountPointReparseBuffer.SubstituteNameOffset/sizeof(WCHAR)));
+#if 1
+					pInfo->MountPoint.TargetPath = AllocStringBufferCb(cbNameSize + sizeof(WCHAR));
+					memcpy(pInfo->MountPoint.TargetPath,pName,cbNameSize);
+					pInfo->MountPoint.TargetPath[WCHAR_CHARS(cbNameSize)] = UNICODE_NULL;
+#else
+					pInfo->MountPoint.TargetPath = pName;
+#endif
+					pInfo->MountPoint.TargetPathLength = (ULONG)cbNameSize;
+				}
+
+				// Get print path
+				if( pInfo->MountPoint.PrintPath == NULL )
+				{
+					cbNameSize = pBuffer->SymbolicLinkReparseBuffer.PrintNameLength;
+					pName = (pBuffer->MountPointReparseBuffer.PathBuffer + (pBuffer->SymbolicLinkReparseBuffer.PrintNameOffset/sizeof(WCHAR)));
+#if 1	
+					pInfo->MountPoint.PrintPath = AllocStringBufferCb(cbNameSize + sizeof(WCHAR));
+					memcpy(pInfo->MountPoint.PrintPath,pName,cbNameSize);
+					pInfo->MountPoint.PrintPath[WCHAR_CHARS(cbNameSize)] = UNICODE_NULL;
+#else
+					pInfo->MountPoint.PrintPath = pName;
+#endif
+					pInfo->MountPoint.PrintPathLength = (ULONG)cbNameSize;
+				}
+
+				FreeMemory(pBuffer);
+
+				_SetLastWin32Error( ERROR_SUCCESS );
+				break;
+			}
+			case IO_REPARSE_TAG_SYMLINK:
+			{
+				pInfo->SymLink.Flags = pBuffer->SymbolicLinkReparseBuffer.Flags;
+
+				// Get target path
+				if( pInfo->SymLink.TargetPath == NULL )
+				{
+					cbNameSize = pBuffer->SymbolicLinkReparseBuffer.SubstituteNameLength;
+
+					pName = (pBuffer->SymbolicLinkReparseBuffer.PathBuffer + (pBuffer->SymbolicLinkReparseBuffer.SubstituteNameOffset/sizeof(WCHAR)));
+#if 1
+					pInfo->SymLink.TargetPath = AllocStringBufferCb(cbNameSize + sizeof(WCHAR));
+					memcpy(pInfo->SymLink.TargetPath,pName,cbNameSize);
+					pInfo->SymLink.TargetPath[WCHAR_CHARS(cbNameSize)] = UNICODE_NULL;
+#else
+					pInfo->SymLink.TargetPath = pName;
+#endif
+					pInfo->SymLink.TargetPathLength = (ULONG)cbNameSize;
+				}
+
+				// Get print path
+				if( pInfo->SymLink.PrintPath == NULL )
+				{
+					cbNameSize = pBuffer->SymbolicLinkReparseBuffer.PrintNameLength;
+
+					pName = (pBuffer->SymbolicLinkReparseBuffer.PathBuffer + (pBuffer->SymbolicLinkReparseBuffer.PrintNameOffset/sizeof(WCHAR)));
+#if 1
+					pInfo->SymLink.PrintPath = AllocStringBufferCb(cbNameSize + sizeof(WCHAR));
+					memcpy(pInfo->SymLink.PrintPath,pName,cbNameSize);
+					pInfo->SymLink.PrintPath[WCHAR_CHARS(cbNameSize)] = UNICODE_NULL;
+#else
+					pInfo->SymLink.PrintPath = pName;
+#endif
+					pInfo->SymLink.PrintPathLength = (ULONG)cbNameSize;
+				}
+
+				FreeMemory(pBuffer);
+
+				_SetLastWin32Error( ERROR_SUCCESS );
+				break;
+			}
+			case IO_REPARSE_TAG_APPEXECLINK:
+			{
+				APPEXECLINK_READ_BUFFER *pal = (APPEXECLINK_READ_BUFFER *)pBuffer;
+				pInfo->AppExecLink.Version = pal->Version;
+				{
+					pInfo->AppExecLink.Buffer = (PUCHAR)pBuffer;
+
+					WCHAR *pStr = ((APPEXECLINK_READ_BUFFER *)pInfo->AppExecLink.Buffer)->StringList;
+
+					// 0:"Package ID"
+					// 1:"Entry Point"
+					// 2:"Executable"
+					// 3:"Application Type" Integer as ASCII. 
+					for(int iIndex = 0; iIndex < 4; iIndex++)
+					{
+						switch( iIndex )
+						{
+							case 0:
+								pInfo->AppExecLink.PackageID = pStr;
+								break;
+							case 1:
+								pInfo->AppExecLink.EntryPoint = pStr;
+								break;
+							case 2:
+								pInfo->AppExecLink.Executable = pStr;
+								break;
+							case 3:
+								pInfo->AppExecLink.ApplicType = pStr;
+								break;
+						}
+						pStr += (wcslen(pStr)+1);
+					}
+				}
+				break;
+			}
+			case IO_REPARSE_TAG_HSM:
+			case IO_REPARSE_TAG_HSM2:
+			case IO_REPARSE_TAG_SIS:
+			case IO_REPARSE_TAG_WIM:
+			case IO_REPARSE_TAG_CSV:
+			case IO_REPARSE_TAG_DFS:
+			case IO_REPARSE_TAG_DFSR:
+			case IO_REPARSE_TAG_DEDUP:
+			case IO_REPARSE_TAG_NFS:
+			case IO_REPARSE_TAG_FILE_PLACEHOLDER:
+			case IO_REPARSE_TAG_WOF:
+			case IO_REPARSE_TAG_WCI:
+			case IO_REPARSE_TAG_WCI_1:
+			case IO_REPARSE_TAG_GLOBAL_REPARSE:
+			case IO_REPARSE_TAG_CLOUD:
+			case IO_REPARSE_TAG_CLOUD_1:
+			case IO_REPARSE_TAG_CLOUD_2:
+			case IO_REPARSE_TAG_CLOUD_3:
+			case IO_REPARSE_TAG_CLOUD_4:
+			case IO_REPARSE_TAG_CLOUD_5:
+			case IO_REPARSE_TAG_CLOUD_6:
+			case IO_REPARSE_TAG_CLOUD_7:
+			case IO_REPARSE_TAG_CLOUD_8:
+			case IO_REPARSE_TAG_CLOUD_9:
+			case IO_REPARSE_TAG_CLOUD_A:
+			case IO_REPARSE_TAG_CLOUD_B:
+			case IO_REPARSE_TAG_CLOUD_C:
+			case IO_REPARSE_TAG_CLOUD_D:
+			case IO_REPARSE_TAG_CLOUD_E:
+			case IO_REPARSE_TAG_CLOUD_F:
+			case IO_REPARSE_TAG_CLOUD_MASK:
+			case IO_REPARSE_TAG_PROJFS:
+			case IO_REPARSE_TAG_STORAGE_SYNC:
+			case IO_REPARSE_TAG_WCI_TOMBSTONE:
+			case IO_REPARSE_TAG_UNHANDLED:
+			case IO_REPARSE_TAG_ONEDRIVE:
+			case IO_REPARSE_TAG_PROJFS_TOMBSTONE:
+			case IO_REPARSE_TAG_AF_UNIX:
+			case IO_REPARSE_TAG_WCI_LINK:
+			case IO_REPARSE_TAG_WCI_LINK_1:
+				pInfo->ReparseTag = pBuffer->ReparseTag;
+				pInfo->GenericReparse.Buffer = (PUCHAR)pBuffer;
+				_SetLastWin32Error( ERROR_SUCCESS );
+				bSuccess = TRUE;
+				break;
+
+			default:
+				_SetLastWin32Error( ERROR_INVALID_REPARSE_DATA );
+				bSuccess = FALSE;
+				break;
+		}
+	}
+
+	return bSuccess;
+}
+
+//----------------------------------------------------------------------------
+//
 //  GetObjectIdInformation()
 //
 //  PURPOSE:
@@ -531,9 +854,10 @@ NTFile_CollectFileInformation(
 	//
 	if( pfi->FileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
 	{
-#if _ENABLE_USE_FSLIB
-		 FsLibGetReparsePointInformation(hFile,pfi);
-#endif
+		if( GetReparsePointInformation(hFile,NULL,&pfi->ReparsePointInfo,sizeof(FS_REPARSE_POINT_INFORMATION_EX),0) )
+		{
+			pfi->State.ReparsePoint = 1;
+		}
 	}
 
 	//
@@ -582,6 +906,8 @@ NTFile_FreeFileInformation(
 {
 	if( pfi )
 	{
+		FreeReparsePointInformation(&pfi->ReparsePointInfo);
+
 		FreeEAInformation(pfi->EaBuffer);
 
 		FreeMemory(pfi->Name);

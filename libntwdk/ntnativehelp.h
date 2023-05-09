@@ -2,6 +2,18 @@
 //
 // ntddk/ntifs helper function library
 //
+#ifndef NTAPI
+#define NTAPI __stdcall
+#endif
+
+#ifndef STDCALL
+#define STDCALL __stdcall
+#endif
+
+#ifndef CALLBACK
+#define CALLBACK __stdcall
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
@@ -14,7 +26,8 @@ NTSTATUS NTAPI DuplicateUnicodeString(UNICODE_STRING *pusDup,UNICODE_STRING *pus
 NTSTATUS NTAPI AllocateUnicodeStringCbBuffer(UNICODE_STRING *pus,ULONG cb);
 NTSTATUS NTAPI AllocateUnicodeStringCchBuffer(UNICODE_STRING *pus,ULONG cch);
 PWSTR NTAPI AllocateSzFromUnicodeString(UNICODE_STRING *pus);
-WCHAR* NTAPI AllocStringBuffer(ULONG cch);
+WCHAR* NTAPI AllocStringBuffer(SIZE_T cch);
+WCHAR* NTAPI AllocStringBufferCb(SIZE_T cb);
 PWSTR NTAPI AllocStringLengthCb(PCWSTR psz,SIZE_T cb);
 PWSTR NTAPI DuplicateString(PCWSTR psz);
 BOOLEAN IsNtDevicePath(PCWSTR pszPath);

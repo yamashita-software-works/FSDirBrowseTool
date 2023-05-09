@@ -333,23 +333,23 @@ VOID WINAPI _GetDateTimeStringEx2(ULONG64 DateTime,LPTSTR pszText,int cchTextMax
 {
 	SYSTEMTIME st;
 	FILETIME ftLocal;
-	LARGE_INTEGER li;
+	LARGE_INTEGER liLts;
+	LONGLONG ns = 10000000; // 100ns
 
 	if( bDisplayAsUTC )
 	{
 		FileTimeToSystemTime((FILETIME*)&DateTime,&st);
 
-		li.QuadPart = DateTime % 10000000; // •b–¢–ž‚ðŽæ“¾
+		liLts.QuadPart = DateTime % 10000000; // Get a less than 1 second.
 	}
 	else
 	{
 		FileTimeToLocalFileTime((FILETIME*)&DateTime,&ftLocal);
 		FileTimeToSystemTime(&ftLocal,&st);
 
-		li.HighPart = ftLocal.dwHighDateTime;
-		li.LowPart  = ftLocal.dwLowDateTime;
-
-		li.QuadPart = li.QuadPart % 10000000; // •b–¢–ž‚ðŽæ“¾
+		liLts.HighPart = ftLocal.dwHighDateTime;
+		liLts.LowPart  = ftLocal.dwLowDateTime;
+		liLts.QuadPart = liLts.QuadPart % 10000000; // Get a less than 1 second.
 	}
 
 	int cch;
@@ -369,31 +369,37 @@ VOID WINAPI _GetDateTimeStringEx2(ULONG64 DateTime,LPTSTR pszText,int cchTextMax
 
 	if( bMilliseconds )
 	{
+		WCHAR szMilliseconds[16];
+		int cchMilliseconds;
+
 		WCHAR *p = wcschr(pszText,L'n');
 		if( p )
 		{
 			WCHAR *pMilliseconds = p;
 			// count 'n' characters
 			while( *p == L'n' ) p++;
-			int cch = (int)(p - pMilliseconds);
+			int cch100ns = (int)(p - pMilliseconds);
 
-			if( cch > 0 )
+			if( cch100ns > 0 && ((3 <= cch100ns) && (cch100ns <= 7)))
 			{
-				WCHAR szMilliseconds[32];
-				int cchMilliseconds;
 #if 0
-				cchMilliseconds = wsprintf(szMilliseconds,L"%u",st.wMilliseconds);  // 1ms•\Ž¦
+				cchMilliseconds = wsprintf(szMilliseconds,L"%03u",st.wMilliseconds);  // display  1ms "000"
 #else
-				WCHAR fmt[32];
-				StringCchPrintf(fmt,ARRAYSIZE(fmt),L"%%0%uu",cch);
-				_snwprintf(fmt,ARRAYSIZE(fmt),L"%%0%uu",cch);
-				cchMilliseconds = wsprintf(szMilliseconds,fmt,(UINT)li.QuadPart); // 100ns•\Ž¦
+				cchMilliseconds = wsprintf(szMilliseconds,L"%07u",(UINT)liLts.QuadPart); // display 100ns "0000000"
 #endif
 				int i;
-				for(i = 0; i < cch; i++)
+				for(i = 0; i < cch100ns; i++)
 				{
 					pMilliseconds[i] = szMilliseconds[i];
 				}
+			}
+		}
+		else
+		{
+			if( (cch + 3) < cchTextMax )
+			{
+				cch += wsprintf(szMilliseconds,L".%03u",st.wMilliseconds);
+				wcscat_s(pszText,cchTextMax,szMilliseconds);
 			}
 		}
 	}

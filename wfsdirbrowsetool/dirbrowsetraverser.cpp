@@ -116,7 +116,14 @@ public:
 			if( pszPath[0] == L'\\' && pszPath[1] == L'?' && pszPath[2] == L'?' && pszPath[3] == L'\\' &&
 				iswalpha(pszPath[4]) && pszPath[5] == L':' )
 			{
-				SHGetFileInfo(&pszFileName[4],dwFileAttributes,&sfi,sizeof(sfi),SHGFI_SMALLICON|SHGFI_SYSICONINDEX);
+				UINT fOverlay = 0;
+				if( dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
+					fOverlay |= (SHGFI_LINKOVERLAY|SHGFI_OVERLAYINDEX);
+
+				SHGetFileInfo(&pszFileName[4],dwFileAttributes,&sfi,sizeof(sfi),SHGFI_SMALLICON|SHGFI_SYSICONINDEX|SHGFI_USEFILEATTRIBUTES|fOverlay);
+
+				if( sfi.hIcon != NULL )
+					DestroyIcon(sfi.hIcon);
 				iImage = sfi.iIcon;
 			}
 		}
@@ -135,25 +142,37 @@ public:
 					pszFullPath = CombinePath(&m_pszDirectoryPath[4],pszFileName);
 					if( pszFullPath )
 					{
-						if( SHGetFileInfo(pszFullPath,dwFileAttributes,&sfi,sizeof(sfi),SHGFI_SMALLICON|SHGFI_SYSICONINDEX) )
+						UINT fOverlay = 0;
+						if( dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
+							fOverlay |= (SHGFI_LINKOVERLAY|SHGFI_OVERLAYINDEX);
+						if( SHGetFileInfo(pszFullPath,dwFileAttributes,&sfi,sizeof(sfi),SHGFI_ICON|SHGFI_SYSICONINDEX|SHGFI_SMALLICON|fOverlay) )
 							iImage = sfi.iIcon;
 						FreeMemory(pszFullPath);
+						if( sfi.hIcon != NULL )
+							DestroyIcon(sfi.hIcon);
 					}
 				}
 			}
 		}
+
 		if( iImage == I_IMAGENONE )
 		{
 			if( _IsRootDirectory(pszFileName) )
 			{
 				SHSTOCKICONINFO sii = {sizeof(sii)};
-				SHGetStockIconInfo(SIID_DRIVEFIXED,SHGSI_SYSICONINDEX|SHGSI_SMALLICON|SHGSI_SHELLICONSIZE|SHGSI_LINKOVERLAY,&sii);
+				SHGetStockIconInfo(SIID_DRIVEFIXED,SHGSI_SYSICONINDEX|SHGSI_SMALLICON|SHGSI_SHELLICONSIZE,&sii);
 				iImage = sii.iSysImageIndex;
 			}
 			else
 			{
-				SHGetFileInfo(PathFindFileName(pszFileName),dwFileAttributes,&sfi,sizeof(sfi),SHGFI_SMALLICON|SHGFI_SYSICONINDEX|SHGFI_USEFILEATTRIBUTES);
+				UINT fOverlay = 0;
+				if( dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
+					fOverlay |= (SHGSI_LINKOVERLAY|SHGFI_OVERLAYINDEX);
+				SHGetFileInfo(PathFindFileName(pszFileName),dwFileAttributes,&sfi,sizeof(sfi),
+						SHGFI_ICON|SHGFI_SMALLICON|SHGFI_SYSICONINDEX|SHGFI_USEFILEATTRIBUTES|fOverlay);
 				iImage = sfi.iIcon;
+				if( sfi.hIcon != NULL )
+					DestroyIcon(sfi.hIcon);
 			}
 		}
 
@@ -257,7 +276,7 @@ public:
 
 	static HRESULT CALLBACK EnumProc(ULONG CallType,PVOID FileInfo,PFSDIRENUMCALLBACKINFO DirEnumInfo,PVOID Context)
 	{
-		FILE_ID_BOTH_DIR_INFORMATION *pfibdi = (FILE_ID_BOTH_DIR_INFORMATION *)FileInfo;
+		FS_FILE_ID_BOTH_DIR_INFORMATION *pfibdi = (FS_FILE_ID_BOTH_DIR_INFORMATION *)FileInfo;
 
 		WCHAR filename[MAX_PATH];
 		memcpy_s(filename,sizeof(filename),pfibdi->FileName,pfibdi->FileNameLength);
@@ -476,6 +495,16 @@ public:
 			ptvdi->item.iImage = 
 			ptvdi->item.iSelectedImage = GetImageListIndex(pItem->Path,pItem->FileName,pItem->FileAttributes);
 			ptvdi->item.mask |= TVIF_DI_SETITEM;
+
+			if( ptvdi->item.iSelectedImage > 0xFFFFFF )
+			{
+				UINT o = (ptvdi->item.iImage >> 24);
+				ptvdi->item.state = INDEXTOOVERLAYMASK( o );
+				ptvdi->item.stateMask = LVIS_OVERLAYMASK;
+				ptvdi->item.mask |= TVIF_STATE;
+				ptvdi->item.iImage &= 0x00FFFFFF;
+			}
+
 		}
 
 		return 0;

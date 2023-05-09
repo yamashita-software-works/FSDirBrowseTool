@@ -1,17 +1,9 @@
 #pragma once
-
-#ifndef NTAPI
-#define NTAPI __stdcall
-#endif
-
-#ifndef STDCALL
-#define STDCALL __stdcall
-#endif
-
-#ifndef CALLBACK
-#define CALLBACK __stdcall
-#endif
-
+//
+// ntnativeapi.h
+//
+// NT native API definitions.
+//
 EXTERN_C
 VOID
 NTAPI
@@ -332,6 +324,7 @@ typedef struct RTL_DRIVE_LETTER_CURDIR
     UNICODE_STRING DosPath;
 } RTL_DRIVE_LETTER_CURDIR, *PRTL_DRIVE_LETTER_CURDIR;
 
+#ifndef _WINTERNL_
 typedef struct _RTL_USER_PROCESS_PARAMETERS
 {
     ULONG MaximumLength;
@@ -363,6 +356,15 @@ typedef struct _RTL_USER_PROCESS_PARAMETERS
     UNICODE_STRING RuntimeData;
     RTL_DRIVE_LETTER_CURDIR CurrentDirectories[32];
 } RTL_USER_PROCESS_PARAMETERS, *PRTL_USER_PROCESS_PARAMETERS;
+#endif
+
+#ifndef _NTIFS_
+typedef struct _CLIENT_ID {
+    HANDLE UniqueProcess;
+    HANDLE UniqueThread;
+} CLIENT_ID;
+typedef CLIENT_ID *PCLIENT_ID;
+#endif
 
 typedef struct _RTL_USER_PROCESS_INFORMATION
 {
@@ -459,6 +461,18 @@ RtlCreateEnvironment(
 //
 // NT Native API
 //
+
+#ifndef _WDMDDK_
+typedef struct _FILE_NETWORK_OPEN_INFORMATION {
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER LastWriteTime;
+    LARGE_INTEGER ChangeTime;
+    LARGE_INTEGER AllocationSize;
+    LARGE_INTEGER EndOfFile;
+    ULONG FileAttributes;
+} FILE_NETWORK_OPEN_INFORMATION, *PFILE_NETWORK_OPEN_INFORMATION;
+#endif
 
 EXTERN_C
 NTSTATUS
@@ -733,6 +747,64 @@ NtQueryEaFile(
     __in_opt PULONG EaIndex,
     __in   BOOLEAN RestartScan
     );
+
+//////////////////////////////////////////////////////////////////////////////
+
+//
+// for Symboloc Link
+//
+#define SYMLINK_FLAG_RELATIVE   1
+
+#ifndef _NTIFS_
+
+typedef struct _REPARSE_DATA_BUFFER {
+    ULONG  ReparseTag;
+    USHORT ReparseDataLength;
+    USHORT Reserved;
+    union {
+        struct {
+            USHORT SubstituteNameOffset;
+            USHORT SubstituteNameLength;
+            USHORT PrintNameOffset;
+            USHORT PrintNameLength;
+            ULONG Flags;
+            WCHAR PathBuffer[1];
+        } SymbolicLinkReparseBuffer;
+        struct {
+            USHORT SubstituteNameOffset;
+            USHORT SubstituteNameLength;
+            USHORT PrintNameOffset;
+            USHORT PrintNameLength;
+            WCHAR PathBuffer[1];
+        } MountPointReparseBuffer;
+        struct {
+            UCHAR  DataBuffer[1];
+        } GenericReparseBuffer;
+    } DUMMYUNIONNAME;
+} REPARSE_DATA_BUFFER, *PREPARSE_DATA_BUFFER;
+
+#endif
+
+//
+// for App Exec Link
+//
+typedef struct _REPARSE_APPEXECLINK_READ_BUFFER { // For tag IO_REPARSE_TAG_APPEXECLINK
+	ULONG  ReparseTag;
+	USHORT ReparseDataLength;
+	USHORT Reserved;
+	ULONG  Version;	        // Currently version 3
+	WCHAR  StringList[1];	// Multistring (Consecutive strings each ending with a NUL)
+  /* There are normally 4 strings here. Ex:
+	Package ID:	    L"Microsoft.WindowsTerminal_8wekyb3d8bbwe"
+	Entry Point:	L"Microsoft.WindowsTerminal_8wekyb3d8bbwe!App"
+	Executable:	    L"C:\Program Files\WindowsApps\Microsoft.WindowsTerminal_1.4.3243.0_x64__8wekyb3d8bbwe\wt.exe"
+	Applic. Type:	l"0" Integer as ASCII. "0" = Desktop bridge application; Else sandboxed UWP application
+  */     
+} APPEXECLINK_READ_BUFFER, *PAPPEXECLINK_READ_BUFFER;
+
+//#define _REPARSE_DATA_BUFFER_LENGTH  (sizeof(REPARSE_DATA_BUFFER) + _NT_PATH_FULL_LENGTH_BYTES)
+
+#include "ntreparsepointtag.h"
 
 //////////////////////////////////////////////////////////////////////////////
 

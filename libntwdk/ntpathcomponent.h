@@ -28,4 +28,16 @@
 #define INVALID_HANDLE_VALUE ((HANDLE)-1)
 #endif
 
+#define _NT_MAX_PATH_LENGTH                    UNICODE_STRING_MAX_CHARS
+#define _NT_MAX_ALTERNATE_STREAM_NAME_LENGTH   (260)    // ex) ":nnn...n"
+#define _NT_MAX_ALTERNATE_STREAM_TYPE_LENGTH   (8)      // ex) ":$DATA"
+#define _NT_MAX_VOLUME_LENGTH                  (80)     // \\?\Volume{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}
+
+#define _NT_PATH_FULL_LENGTH (_NT_MAX_VOLUME_LENGTH \
+						+_NT_MAX_PATH_LENGTH \
+						+_NT_MAX_ALTERNATE_STREAM_NAME_LENGTH \
+						+_NT_MAX_ALTERNATE_STREAM_TYPE_LENGTH )
+
+#define _NT_PATH_FULL_LENGTH_BYTES (_NT_PATH_FULL_LENGTH * sizeof(WCHAR))
+
 #endif

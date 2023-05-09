@@ -69,9 +69,14 @@ EXTERN_C PVOID NTAPI ReAllocateHeap(PVOID pv,SIZE_T cb)
     return RtlReAllocateHeap(_GetProcessHeap(),0,pv,cb);
 }
 
-EXTERN_C WCHAR* NTAPI AllocStringBuffer(ULONG cch)
+EXTERN_C WCHAR* NTAPI AllocStringBuffer(SIZE_T cch)
 {
     return (WCHAR *)RtlAllocateHeap(_GetProcessHeap(),HEAP_ZERO_MEMORY,cch*sizeof(WCHAR));
+}
+
+EXTERN_C WCHAR* NTAPI AllocStringBufferCb(SIZE_T cb)
+{
+    return (WCHAR *)RtlAllocateHeap(_GetProcessHeap(),HEAP_ZERO_MEMORY,cb);
 }
 
 EXTERN_C VOID NTAPI FreeMemory(PVOID ptr)

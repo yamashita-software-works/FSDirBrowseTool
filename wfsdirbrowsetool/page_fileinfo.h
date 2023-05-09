@@ -7,6 +7,7 @@
 #include "stdafx.h"
 #include "dirbrowseview.h"
 #include "fileinfo.h"
+#include "ntreparsepointtag.h"
 
 //
 // GetDisp Hanlder
@@ -198,7 +199,7 @@ public:
 		switch( fmt )
 		{
 			case 0:
-				_GetDateTimeStringEx2(dt,pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,NULL,L"hh:mm:ss.nnn",0,1);
+				_GetDateTimeStringEx2(dt,pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,NULL,L"HH:mm:ss.nnn",0,1);
 				break;
 			case 1:	
 				StringCchPrintf(pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,L"0x%016I64X",dt);
@@ -363,6 +364,7 @@ public:
 
 		if( m_pch == NULL )
 		{
+			// initialize once only
 			InitDisplayHandler( m_pch );
 		}
 
@@ -679,6 +681,8 @@ public:
 
 		if( GetGroupItemCount(ID_GROUP_ALTSTREAMS) > 0 )
 			DeleteGroupItems(ID_GROUP_ALTSTREAMS);
+		if( GetGroupItemCount(ID_GROUP_REPARSEPOINT) > 0 )
+			DeleteGroupItems(ID_GROUP_REPARSEPOINT);
 		if( GetGroupItemCount(ID_GROUP_EA) > 0 )
 			DeleteGroupItems(ID_GROUP_EA);
 
@@ -692,6 +696,11 @@ public:
 			if( m_pFI->EaSize > 0 )
 			{
 				InsertEaItems();
+			}
+
+			if( m_pFI->State.ReparsePoint )
+			{
+				InsertReparsePoint();
 			}
 		}
 
@@ -707,6 +716,7 @@ public:
 		lvi.iImage   = I_IMAGENONE;
 		lvi.iIndent  = 1;
 		lvi.lParam   = 0;
+		lvi.iGroupId = ID_GROUP_ALTSTREAMS;
 		lvi.iItem    = ListView_GetItemCount(m_hWndList);
 
 		WCHAR szTitle[64];
@@ -724,8 +734,6 @@ public:
 			}
 
 			lvi.pszText  = szTitle;
-			lvi.iGroupId = ID_GROUP_ALTSTREAMS;
-			lvi.lParam   = -1;
 			ListView_InsertItem(m_hWndList,&lvi);
 
 			ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->AltStream.AltStreamName[i].Name);
@@ -736,26 +744,111 @@ public:
 
 	void InsertEaItems()
 	{
+		WCHAR szTitle[64];
 		LVITEM lvi = {0};
 		lvi.mask     = LVIF_TEXT|LVIF_IMAGE|LVIF_INDENT|LVIF_PARAM|LVIF_GROUPID;
 		lvi.iImage   = I_IMAGENONE;
 		lvi.iIndent  = 1;
 		lvi.lParam   = 0;
+		lvi.iGroupId = ID_GROUP_EA;
 		lvi.iItem    = ListView_GetItemCount(m_hWndList);
-		WCHAR szTitle[64];
+
 		int num = 1;
 		for(ULONG i = 0; i < m_pFI->EaBuffer->EaCount; i++)
 		{
 			StringCchPrintf(szTitle,ARRAYSIZE(szTitle),L"EA #%d",i+1);
 			lvi.pszText  = szTitle;
-			lvi.iGroupId = ID_GROUP_EA;
-			lvi.lParam   = -1;
 			ListView_InsertItem(m_hWndList,&lvi);
 
 			StringCchPrintf(szTitle,ARRAYSIZE(szTitle),L"%S",m_pFI->EaBuffer->Ea[i].Name);
 			ListView_SetItemText(m_hWndList,lvi.iItem,1,szTitle);
 
 			lvi.iItem++;
+		}
+	}
+
+	void InsertReparsePoint()
+	{
+		WCHAR szTag[32];
+
+		LVITEM lvi = {0};
+		lvi.mask     = LVIF_TEXT|LVIF_IMAGE|LVIF_INDENT|LVIF_PARAM|LVIF_GROUPID;
+		lvi.iImage   = I_IMAGENONE;
+		lvi.iIndent  = 1;
+		lvi.lParam   = 0;
+		lvi.iGroupId = ID_GROUP_REPARSEPOINT;
+		lvi.iItem    = ListView_GetItemCount(m_hWndList);
+
+		lvi.pszText  = L"Rearse Tag";
+		ListView_InsertItem(m_hWndList,&lvi);
+
+		switch( m_pFI->ReparsePointInfo.ReparseTag )
+		{
+			case IO_REPARSE_TAG_SYMLINK:
+			{
+				StringCchPrintf(szTag,ARRAYSIZE(szTag),L"0x%08X (Symbolic Link)",m_pFI->ReparsePointInfo.ReparseTag);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,szTag);
+				lvi.iItem++;
+
+				lvi.pszText  = L"Target Path";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.SymLink.TargetPath);
+				lvi.iItem++;
+
+				lvi.pszText  = L"Print Path";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.SymLink.PrintPath);
+				lvi.iItem++;
+				break;
+			}
+			case IO_REPARSE_TAG_MOUNT_POINT:
+			{
+				StringCchPrintf(szTag,ARRAYSIZE(szTag),L"0x%08X (Mount Point)",m_pFI->ReparsePointInfo.ReparseTag);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,szTag);
+
+				lvi.pszText  = L"Target Path";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.MountPoint.TargetPath);
+				lvi.iItem++;
+
+				lvi.pszText  = L"Print Path";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.MountPoint.PrintPath);
+				lvi.iItem++;
+				break;
+			}
+			case IO_REPARSE_TAG_APPEXECLINK:
+			{
+				StringCchPrintf(szTag,ARRAYSIZE(szTag),L"0x%08X (AppExecLink)",m_pFI->ReparsePointInfo.ReparseTag);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,szTag);
+
+				lvi.pszText  = L"Package ID";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.AppExecLink.PackageID);
+				lvi.iItem++;
+
+				lvi.pszText  = L"Entry Point";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.AppExecLink.EntryPoint);
+				lvi.iItem++;
+
+				lvi.pszText  = L"Executable";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.AppExecLink.Executable);
+				lvi.iItem++;
+
+				lvi.pszText  = L"Application Type";
+				ListView_InsertItem(m_hWndList,&lvi);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,m_pFI->ReparsePointInfo.AppExecLink.ApplicType);
+				lvi.iItem++;
+				break;
+			}
+			default:
+			{
+				StringCchPrintf(szTag,ARRAYSIZE(szTag),L"0x%08X",m_pFI->ReparsePointInfo.ReparseTag);
+				ListView_SetItemText(m_hWndList,lvi.iItem,1,szTag);
+				break;
+			}
 		}
 	}
 

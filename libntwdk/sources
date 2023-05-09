@@ -32,4 +32,4 @@ SOURCES=\
 	ntobjecthelp.cpp\
 	ntvolumehelp.cpp\
 	ntfilehelp.cpp\
-	ntwin32Helper.cpp
+	ntwin32helper.cpp

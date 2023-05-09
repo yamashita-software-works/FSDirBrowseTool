@@ -47,14 +47,23 @@ HWND _GetMainWnd()
 	return hWndMain;
 }
 
+/////////////////////////////////////////////////////////////////////////////////
+#include "..\build.h"
+
 INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 {
 	UNREFERENCED_PARAMETER(lParam);
 	switch (message)
 	{
 		case WM_INITDIALOG:
+		{
 			_CenterWindow(hDlg,GetActiveWindow());
+			WCHAR *psz = new WCHAR[64];
+			StringCchPrintf(psz,128,L"%u.%u.%u.%u Preview",MEJOR_VERSION,MINOR_VERSION,BUILD_NUMBER,PATCH_NUMBER);
+			SetDlgItemText(hDlg,IDC_TEXT,psz);
+			delete[] psz;
 			return (INT_PTR)TRUE;
+		}
 		case WM_COMMAND:
 			if (LOWORD(wParam) == IDOK || LOWORD(wParam) == IDCANCEL)
 			{
@@ -65,6 +74,8 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 	}
 	return (INT_PTR)FALSE;
 }
+
+/////////////////////////////////////////////////////////////////////////////////
 
 #if 0
 //---------------------------------------------------------------------------
@@ -271,7 +282,7 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 //----------------------------------------------------------------------------
 VOID ExitInstance()
 {
-
+	;
 }
 
 //----------------------------------------------------------------------------
@@ -290,6 +301,11 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			hWndMDIClient = CreateMDIClient(hWnd);
 			break; 
 		} 
+		case WM_DESTROY:
+		{
+			PostQuitMessage(0);
+			break;
+		}
 		case WM_SIZE:
 		{
 			// Resizes the MDI client window to fit in the new frame window's client area. 
@@ -332,9 +348,6 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		}
-		case WM_DESTROY:
-			PostQuitMessage(0);
-			break;
 #if 0
 		case WM_ACTIVATE:
 		{

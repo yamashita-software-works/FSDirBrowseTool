@@ -1,5 +1,7 @@
 #pragma once
 
+#include "wfslib.h"
+
 typedef struct _FILE_INFORMATION_ALTSTREAM
 {
 	PWSTR Name;
@@ -69,9 +71,12 @@ typedef struct _FILE_INFORMATION_STRUCT
 	ULONG FileSystemAttributes;
 	ULONG MaximumComponentNameLength;
 
+	FS_REPARSE_POINT_INFORMATION_EX ReparsePointInfo;
+
 	struct
 	{
 		ULONG ObjectId : 1;
+		ULONG ReparsePoint : 1;
 	} State;
 
 } FILE_INFORMATION_STRUCT;
