@@ -1,3 +1,10 @@
+### 0.1.2.0
+
+- Wof (Windows Overlay File)の情報を追加
+
+- FRN (File Reference Number)の情報を追加。
+
+- 短い名前が存在しないと長い名前がそのまま表示されてしまう不具合を修正。
 
 ### 0.1.1.0
 

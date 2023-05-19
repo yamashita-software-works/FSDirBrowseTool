@@ -28,6 +28,7 @@ typedef struct _FILE_INFORMATION_STRUCT
 {
 	PWSTR Name;
 	PWSTR ShortName;
+    LARGE_INTEGER FileReferenceNumber;
 
     LARGE_INTEGER CreationTime;
     LARGE_INTEGER LastAccessTime;
@@ -73,10 +74,20 @@ typedef struct _FILE_INFORMATION_STRUCT
 
 	FS_REPARSE_POINT_INFORMATION_EX ReparsePointInfo;
 
+	struct {
+		WOF_EXTERNAL_INFO *ExternalInfo;
+		union {
+			PVOID GenericPtr;
+			FILE_PROVIDER_EXTERNAL_INFO_V1 *FileInfo;
+			WIM_PROVIDER_EXTERNAL_INFO *WimInfo;
+		};
+	} Wof;
+
 	struct
 	{
 		ULONG ObjectId : 1;
 		ULONG ReparsePoint : 1;
+		ULONG Wof : 1;
 	} State;
 
 } FILE_INFORMATION_STRUCT;
@@ -84,7 +95,7 @@ typedef struct _FILE_INFORMATION_STRUCT
 EXTERN_C
 HRESULT
 APIPRIVATE
-NTFile_CollectFileInformation(
+NTFile_GatherFileInformation(
 	HANDLE hFile,
 	FILE_INFORMATION_STRUCT **pfi
 	);

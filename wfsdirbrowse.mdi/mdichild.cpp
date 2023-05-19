@@ -123,7 +123,7 @@ ATOM RegisterMDIChildFrameClass(HINSTANCE hInstance)
 	wcex.hbrBackground = (HBRUSH)(COLOR_WINDOW+1); 
     wcex.lpszMenuName  = NULL;
     wcex.lpfnWndProc   = (WNDPROC)&MDIChildWndProc; 
-    wcex.hIconSm       = (HICON)LoadImage(hInstance,MAKEINTRESOURCE(IDI_MAIN),IMAGE_ICON,16,16,LR_DEFAULTCOLOR); 
+    wcex.hIconSm       = NULL;
     wcex.lpszMenuName  = (LPCTSTR) NULL; 
     wcex.cbWndExtra    = CBWNDEXTRA; 
     wcex.lpszClassName = MDICHILD_CLASSNAME;

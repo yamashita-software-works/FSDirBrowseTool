@@ -34,8 +34,6 @@ public:
 
 	BOOL m_bPreventAction;
 
-	HIMAGELIST m_himl;
-	int m_iImageUpDir;
 	BOOL m_bGetUniqueIcon;
 
 	CDirectoryTraverser()
@@ -44,8 +42,6 @@ public:
 		m_hWndNotice = NULL;
 		m_pszDirectoryPath = NULL;
 		m_bPreventAction = FALSE;
-		m_himl = NULL;
-		m_iImageUpDir = I_IMAGENONE;
 		m_bGetUniqueIcon = FALSE;
 	}
 
@@ -131,7 +127,7 @@ public:
 		{
 			if( wcscmp(pszFileName,L"..") == 0 )
 			{
-				iImage = m_iImageUpDir;
+				iImage = DIRBGetUpDirImageIndex();
 			}
 			else if( m_bGetUniqueIcon )
 			{
@@ -244,7 +240,6 @@ public:
 			//
 			ULONG FileAttributes = 0;
 			PathFileExists_W(pszDirectoryPath,&FileAttributes);
-//			hSelect = AddItem(ITEM_FOLDER_ROOT,pszDirectoryPath,pszDirectoryPath,pszDirectoryPath,FileAttributes,TVI_ROOT,TVI_SORT,0);
 			hSelect = AddItem(ITEM_FOLDER_ROOT,PathFindFileName(pszDirectoryPath),pszDirectoryPath,pszDirectoryPath,FileAttributes,TVI_ROOT,TVI_SORT,0);
 
 			InsertBlank(TVI_ROOT,TVI_LAST);
@@ -421,21 +416,14 @@ public:
 
 		_EnableVisualThemeStyle(hwndTreeView);
 
-
-		HIMAGELIST himl;
-		Shell_GetImageLists(NULL,&himl);
-		m_himl = himl;
-
+		HIMAGELIST himl = DIRBGetShareImageList();
 		TreeView_SetImageList(hwndTreeView,himl,TVSIL_NORMAL);
 
 		int cx,cy;
 		ImageList_GetIconSize(himl,&cx,&cy);
 
-		HICON hIcon = (HICON)LoadImage(GetModuleHandle(L"shell32"), MAKEINTRESOURCE(46), IMAGE_ICON, cx, cy, 0);
-		m_iImageUpDir = ImageList_AddIcon(m_himl,hIcon);
-
 		TreeView_SetIndent(hwndTreeView,cx/2);
-		TreeView_SetItemHeight(hwndTreeView, cy + 8);
+		TreeView_SetItemHeight(hwndTreeView,cy+8);
 
 		return hwndTreeView;
 	}
@@ -625,10 +613,6 @@ public:
 
 	LRESULT OnSetCursor(LPNMMOUSE lpnmm)
 	{
-		// lpnmm->ptは"A POINT structure that contains the client coordinates of 
-		// the mouse when the click occurred."と説明されているが、POINTとは思えない
-		// 不明な値が入っている。
-		// その為、GetCursorPosで取得し直すしている。
 		GetCursorPos(&lpnmm->pt);
 
 		TVHITTESTINFO tvht = {0};

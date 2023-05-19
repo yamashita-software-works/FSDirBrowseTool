@@ -22,6 +22,25 @@
 
 #define PRIVATE static
 
+#if _USE_INTERNAL_MEMORY_DEBUG
+#include "..\libcwh\mem.h"
+
+EXTERN_C PVOID NTAPI _DebugAllocMemory(SIZE_T cb)
+{
+    return _MemAllocZero(cb);
+}
+
+EXTERN_C PVOID NTAPI _DebugReallocMemory(PVOID pv,SIZE_T cb)
+{
+    return _MemReAlloc(pv,cb);
+}
+
+EXTERN_C VOID NTAPI _DebugFreeMemory(PVOID ptr)
+{
+    _MemFree(ptr);
+}
+#endif
+
 EXTERN_C
 void
 NTAPI
@@ -61,27 +80,47 @@ HANDLE _GetProcessHeap()
 
 EXTERN_C PVOID NTAPI AllocMemory(SIZE_T cb)
 {
+#if _USE_INTERNAL_MEMORY_DEBUG
+    return _DebugAllocMemory(cb);
+#else
     return RtlAllocateHeap(_GetProcessHeap(),HEAP_ZERO_MEMORY,cb);
+#endif
 }
 
 EXTERN_C PVOID NTAPI ReAllocateHeap(PVOID pv,SIZE_T cb)
 {
+#if _USE_INTERNAL_MEMORY_DEBUG
+    return _DebugReallocMemory(pv,cb);
+#else
     return RtlReAllocateHeap(_GetProcessHeap(),0,pv,cb);
+#endif
 }
 
 EXTERN_C WCHAR* NTAPI AllocStringBuffer(SIZE_T cch)
 {
+#if _USE_INTERNAL_MEMORY_DEBUG
+    return (WCHAR *)_DebugAllocMemory(cch*sizeof(WCHAR));
+#else
     return (WCHAR *)RtlAllocateHeap(_GetProcessHeap(),HEAP_ZERO_MEMORY,cch*sizeof(WCHAR));
+#endif
 }
 
 EXTERN_C WCHAR* NTAPI AllocStringBufferCb(SIZE_T cb)
 {
+#if _USE_INTERNAL_MEMORY_DEBUG
+    return (WCHAR *)_DebugAllocMemory(cb);
+#else
     return (WCHAR *)RtlAllocateHeap(_GetProcessHeap(),HEAP_ZERO_MEMORY,cb);
+#endif
 }
 
 EXTERN_C VOID NTAPI FreeMemory(PVOID ptr)
 {
+#if _USE_INTERNAL_MEMORY_DEBUG
+    _DebugFreeMemory(ptr);
+#else
     RtlFreeHeap(_GetProcessHeap(),0,ptr);
+#endif
 }
 
 EXTERN_C NTSTATUS NTAPI AllocateUnicodeString(UNICODE_STRING *pus,PCWSTR psz)
@@ -610,18 +649,6 @@ BOOLEAN PathFileExists_W(PCWSTR pszPath,ULONG *FileAttributes)
     return PathFileExists_U(&usPath,FileAttributes);
 }
 
-PRIVATE VOID GetCurrentDirectory()
-{
-    WCHAR PathBuffer[WIN32_MAX_PATH];
-    RtlGetCurrentDirectory_U(PATH_BUFFER_LENGTH,PathBuffer);
-
-    UNICODE_STRING NtPathName;
-    if( RtlDosPathNameToNtPathName_U(PathBuffer,&NtPathName,NULL,NULL) )
-    {
-        RtlFreeUnicodeString(&NtPathName);
-    }
-}
-
 PRIVATE PWSTR MakeFullPath(PCWSTR pszPath)
 {
     WCHAR szFullPath[WIN32_MAX_PATH];
@@ -641,7 +668,7 @@ PWSTR DosPathNameToNtPathName(PCWSTR pszDosPath)
     return pszNtPath;
 }
 
-NTSTATUS GetFileNamePart_U(UNICODE_STRING *FilePath,UNICODE_STRING *FileName)
+NTSTATUS GetFileNamePart_U(__in UNICODE_STRING *FilePath,__out UNICODE_STRING *FileName)
 {
     NTSTATUS Status;
     ULONG cch = 0;
@@ -659,7 +686,7 @@ NTSTATUS GetFileNamePart_U(UNICODE_STRING *FilePath,UNICODE_STRING *FileName)
     return Status;
 }
 
-NTSTATUS SplitPathFileName_U(UNICODE_STRING *Path,UNICODE_STRING *FileName)
+NTSTATUS SplitPathFileName_U(__inout UNICODE_STRING *Path,__out UNICODE_STRING *FileName)
 {
     NTSTATUS Status;
     ULONG cch = 0;
@@ -709,6 +736,38 @@ BOOLEAN SplitRootRelativePath(PCWSTR pszFullPath,UNICODE_STRING *RootDirectory,U
     UNICODE_STRING us1,us2;
     RtlDuplicateUnicodeString(0x3,RootDirectory,&us1);
     RtlDuplicateUnicodeString(0x3,RootRelativePath,&us2);
+    RtlFreeUnicodeString(&us1);
+    RtlFreeUnicodeString(&us2);
+#endif
+
+    return TRUE;
+}
+
+BOOLEAN SplitVolumeRelativePath(PCWSTR pszFullPath,UNICODE_STRING *VolumeName,UNICODE_STRING *VolumeRelativePath)
+{
+    UNICODE_STRING usVolumeName;
+
+    RtlInitUnicodeString(&usVolumeName,pszFullPath);
+
+    if( !GetVolumeName_U(&usVolumeName) )
+    {
+        return FALSE;
+    }
+
+    *VolumeName = usVolumeName;
+
+    int cb = WCHAR_BYTES( (int)wcslen(pszFullPath) );
+    if( ((cb - usVolumeName.Length) >= 65536) || ((cb - usVolumeName.MaximumLength) >= 65536) )
+        return FALSE;
+
+    VolumeRelativePath->Length        = (USHORT)(cb - usVolumeName.Length);
+    VolumeRelativePath->MaximumLength = (USHORT)(cb - usVolumeName.MaximumLength);
+    VolumeRelativePath->Buffer        = (PWCH)&pszFullPath[ WCHAR_LENGTH(usVolumeName.Length) ];
+
+#ifdef _DEBUG
+    UNICODE_STRING us1,us2;
+    RtlDuplicateUnicodeString(0x3,VolumeName,&us1);
+    RtlDuplicateUnicodeString(0x3,VolumeRelativePath,&us2);
     RtlFreeUnicodeString(&us1);
     RtlFreeUnicodeString(&us2);
 #endif

@@ -1,8 +1,1 @@
-
-#ifndef _ENABLE_USE_FSLIB
-#define _ENABLE_USE_FSLIB    0
-#endif
-
-#ifndef _ENABLE_MODAL_DIALOG_SUPPORT
-#define _ENABLE_MODAL_DIALOG_SUPPORT    0
-#endif
+// todo:

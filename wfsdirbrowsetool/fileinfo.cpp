@@ -20,18 +20,7 @@
 #include "libntwdk.h"
 #include "..\libntwdk\ntnativeapi.h"
 #include "builddefs.h"
-
-#if _ENABLE_USE_FSLIB
-//
-// Tentatively in use dll functions.
-//
-#include <ntimage.h>
-#include <delayimp.h>
-#define _NO_NTFSDEF_
-#define _NO_FSPATHBUFFER
-#include "..\fslib\inc\fslib.h"
-HRESULT FsLibGetReparsePointInformation(HANDLE,FILE_INFORMATION_STRUCT*);
-#endif
+#include "wfswof.h"
 
 #define PRIVATE static
 
@@ -721,9 +710,196 @@ GetObjectIdInformation(
 	return RtlGetLastWin32Error();
 }
 
+//----------------------------------------------------------------------------
+//
+//  GetWofFileInformation()
+//
+//  PURPOSE:
+//
+//----------------------------------------------------------------------------
+PRIVATE
+NTSTATUS
+APIENTRY
+GetWofFileInformation(
+	HANDLE FileHandle,
+	PVOID *ExternalInfo,
+	PVOID *ProviderInfo
+	)
+{
+	NTSTATUS Status;
+	IO_STATUS_BLOCK IoStatus = {0};
+
+	ULONG cbBuffer = 4096;
+	UCHAR *pBuffer = (UCHAR *)AllocMemory(cbBuffer);
+	if( pBuffer == NULL )
+	{
+		return E_OUTOFMEMORY;
+	}
+
+	Status = NtFsControlFile(FileHandle,NULL,NULL,NULL,
+					&IoStatus,
+					FSCTL_GET_EXTERNAL_BACKING,
+					NULL,0,
+					pBuffer,cbBuffer);
+
+	if( Status == STATUS_PENDING )
+	{
+		LARGE_INTEGER li;
+		li.QuadPart = -(10000000 * 10); // maximum wait 10sec
+		Status = NtWaitForSingleObject(FileHandle,FALSE,&li);
+		if( Status != STATUS_SUCCESS )
+		{
+			FreeMemory(pBuffer);
+			*ExternalInfo = NULL;
+			*ProviderInfo = NULL;
+			return Status;
+		}
+		Status = IoStatus.Status;
+	}
+
+	if( Status == STATUS_SUCCESS && IoStatus.Information != 0 )
+	{
+		pBuffer = (UCHAR*)ReAllocateHeap(pBuffer,(ULONG)IoStatus.Information);
+
+		WOF_EXTERNAL_INFO *pwei = (WOF_EXTERNAL_INFO *)pBuffer;
+
+		*ExternalInfo = pwei;
+
+		if( pwei->Provider == WOF_PROVIDER_FILE )
+		{
+			FILE_PROVIDER_EXTERNAL_INFO_V1 *pFile = (FILE_PROVIDER_EXTERNAL_INFO_V1 *)&pBuffer[8];
+			// pFile->Version;
+			// pFile->Algorithm
+			// pFile->Flags
+			*ProviderInfo = pFile;
+		}
+		else if( pwei->Provider == WOF_PROVIDER_WIM )
+		{
+			WIM_PROVIDER_EXTERNAL_INFO *pWIM = (WIM_PROVIDER_EXTERNAL_INFO *)&pBuffer[8];
+			// pWIM->Version;
+			// pWIM->Flags;
+			// pWIM->DataSourceId;
+			// pWIM->ResourceHash[WIM_PROVIDER_HASH_SIZE];
+			*ProviderInfo = pWIM;
+		}
+		else
+		{
+			FreeMemory(pwei);
+			*ExternalInfo = NULL;
+			*ProviderInfo = NULL;
+			Status = STATUS_UNSUCCESSFUL;
+		}
+	}
+	else
+	{
+		FreeMemory(pBuffer);
+		*ExternalInfo = NULL;
+		*ProviderInfo = NULL;
+	}
+
+	return Status;
+}
+
+//----------------------------------------------------------------------------
+//
+//  FreeWofFileInformation()
+//
+//  PURPOSE:
+//
+//----------------------------------------------------------------------------
+
+#define FreeWofFileInformation(ei,pi) FreeMemory(ei); // pi is do not free
+
+//----------------------------------------------------------------------------
+//
+//  GetSparseAllocatedRange()
+//
+//  PURPOSE:
+//
+//----------------------------------------------------------------------------
+/*
+typedef struct _FS_SPARSE_ALLOCATED_RANGE {
+    LARGE_INTEGER FileOffset;
+    LARGE_INTEGER Length;
+} FS_SPARSE_ALLOCATED_RANGE, *PFS_SPARSE_ALLOCATED_RANGE;
+
+PRIVATE
+NTSTATUS
+APIENTRY
+FsGetSparseAllocatedRange(
+	HANDLE hRoot,
+	LPCWSTR FilePath,
+	FS_SPARSE_ALLOCATED_RANGE **pBuffer,
+	ULONG *pcbBufferSize
+	)
+{
+	HANDLE hFile;
+
+	if( FilePath != NULL )
+	{
+		hFile = FsOpenFile(hRoot, FilePath, FILE_GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE,0,NULL);
+
+		if( hFile == INVALID_HANDLE_VALUE )
+		{
+			return GetLastError();
+		}
+	}
+	else
+	{
+		hFile = hRoot;
+	}
+
+	FILE_ALLOCATED_RANGE_BUFFER ScanRange;
+	FILE_ALLOCATED_RANGE_BUFFER *AllocatedParts;
+	DWORD cbBytesReturned = 0;
+	DWORD cb = sizeof(FILE_ALLOCATED_RANGE_BUFFER) * 1024;
+	LONG lResult = 0;
+
+_retry_alloc:
+	AllocatedParts = (FILE_ALLOCATED_RANGE_BUFFER *)FsMemAlloc( cb );
+	if( AllocatedParts == NULL )
+	{
+		CloseHandle(hFile);
+		return ERROR_NOT_ENOUGH_MEMORY;
+	}
+
+	ScanRange.FileOffset.QuadPart = 0;
+	GetFileSizeEx(hFile,&ScanRange.Length);
+
+	if( !_DeviceIoControl(hFile,
+			FSCTL_QUERY_ALLOCATED_RANGES,
+			&ScanRange,sizeof(ScanRange),
+			AllocatedParts,cb,
+			&cbBytesReturned) )
+	{
+		// Win32
+		// FSCTL_QUERY_ALLOCATED_RANGESでバッファサイズが不足した場合ERROR_MORE_DATA(0xEA)が返る。
+		lResult = GetLastError();
+		if(lResult == ERROR_MORE_DATA )
+		{
+			FsMemFree( AllocatedParts );
+			cb += 512;
+			goto _retry_alloc;
+		}
+	}
+	else
+	{
+		*pBuffer = (FS_SPARSE_ALLOCATED_RANGE *)FsMemReAlloc(AllocatedParts,cbBytesReturned); // do shrink only.
+		*pcbBufferSize = cbBytesReturned;
+		lResult = ERROR_SUCCESS;
+	}
+
+	if( FilePath != NULL )
+		CloseHandle(hFile);
+
+	return lResult;
+}
+*/
+/////////////////////////////////////////////////////////////////////////////
+
 //---------------------------------------------------------------------------
 //
-//  NTFile_CollectFileInformation()
+//  NTFile_GatherFileInformation()
 //
 //  PURPOSE:
 //
@@ -731,7 +907,7 @@ GetObjectIdInformation(
 EXTERN_C
 HRESULT
 APIENTRY
-NTFile_CollectFileInformation(
+NTFile_GatherFileInformation(
 	HANDLE hFile,
 	FILE_INFORMATION_STRUCT **ppfi
 	)
@@ -778,6 +954,15 @@ NTFile_CollectFileInformation(
 	pfi->DeletePending = fsi.DeletePending;
 
 	//
+	// File Internal Information (Fild Id/File Reference Number)
+	//
+	FILE_INTERNAL_INFORMATION FileId;
+	if( NtQueryInformationFile(hFile,&IoStatus,&FileId,sizeof(FileId),FileInternalInformation) == STATUS_SUCCESS )
+	{
+		pfi->FileReferenceNumber = FileId.IndexNumber;
+	}
+
+	//
 	// File Name / Alternate (Short) Name Information
 	//
 	ULONG cb = sizeof(FILE_NAME_INFORMATION) + WIN32_MAX_PATH_BYTES;
@@ -788,9 +973,11 @@ NTFile_CollectFileInformation(
 		pfni->FileName[ pfni->FileNameLength / sizeof(WCHAR) ] = UNICODE_NULL;
 		pfi->Name = DuplicateString(pfni->FileName);
 
-		NtQueryInformationFile(hFile,&IoStatus,pfni,cb,FileAlternateNameInformation);
-		pfni->FileName[ pfni->FileNameLength / sizeof(WCHAR) ] = UNICODE_NULL;
-		pfi->ShortName = DuplicateString(pfni->FileName);
+		if( NtQueryInformationFile(hFile,&IoStatus,pfni,cb,FileAlternateNameInformation) == STATUS_SUCCESS )
+		{
+			pfni->FileName[ pfni->FileNameLength / sizeof(WCHAR) ] = UNICODE_NULL;
+			pfi->ShortName = DuplicateString(pfni->FileName);
+		}
 
 		FreeMemory(pfni);
 	}
@@ -883,7 +1070,13 @@ NTFile_CollectFileInformation(
 	//
 	// Wof Information
 	//
-	; // todo:
+	if( (pfi->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 )
+	{
+		if( GetWofFileInformation(hFile,(PVOID*)&pfi->Wof.ExternalInfo,&pfi->Wof.GenericPtr) == STATUS_SUCCESS )
+		{
+			pfi->State.Wof = true;
+		}
+	}
 
 	*ppfi = pfi;
 
@@ -917,6 +1110,8 @@ NTFile_FreeFileInformation(
 		for(i = 0; i < pfi->AltStream.cAltStreamName; i++)
 			FreeMemory(pfi->AltStream.AltStreamName[i].Name);
 		FreeMemory(pfi->AltStream.AltStreamName);
+
+		FreeWofFileInformation(pfi->Wof.ExternalInfo,pfi->Wof.GenericPtr);
 
 		FreeMemory(pfi);
 	}
@@ -990,50 +1185,3 @@ NTFile_GetAttributeString(
 
 	return TRUE;
 }
-
-//////////////////////////////////////////////////////////////////////////////
-
-#if _ENABLE_USE_FSLIB
-//
-// Tentatively in use dll functions.
-//
-int CheckDelayException(int exception_value)
-{
-    if (exception_value == VcppException(ERROR_SEVERITY_ERROR, ERROR_MOD_NOT_FOUND) ||
-        exception_value == VcppException(ERROR_SEVERITY_ERROR, ERROR_PROC_NOT_FOUND))
-    {
-        // This example just executes the handler.
-        return EXCEPTION_EXECUTE_HANDLER;
-    }
-    // Don't attempt to handle other errors
-    return EXCEPTION_CONTINUE_SEARCH;
-}
-
-HRESULT FsLibGetReparsePointInformation(HANDLE hFile,FILE_INFORMATION_STRUCT *pfi)
-{
-	HRESULT hr = E_FAIL;
-	DWORD dw;
-	__try 
-	{ 
-		FS_REPARSE_POINT_INFORMATION fsrpi = {0};
-		fsrpi.TargetPathLength = 32768+260;
-		fsrpi.TargetPath = (PWSTR)AllocMemory(fsrpi.TargetPathLength);
-		fsrpi.PrintPathLength = 32768+260;
-		fsrpi.PrintPath = (PWSTR)AllocMemory(fsrpi.PrintPathLength);
-		if( FsGetReparsePointInformation( hFile, NULL, FsReparsePointDetail, &fsrpi, sizeof(fsrpi)) )
-		{
-			//pfi
-//				fsrpi.ReparseTag
-//				fsrpi.TargetPath
-//				fsrpi.PrintPath
-		}
-		FreeMemory( fsrpi.TargetPath );
-		FreeMemory( fsrpi.PrintPath );
-    } 
-	__except( CheckDelayException( dw = GetExceptionCode() ) )
-    { 
-        hr = HRESULT_FROM_WIN32( (dw & 0xFFFF) );
-    }
-	return hr;
-}
-#endif

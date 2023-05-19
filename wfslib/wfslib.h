@@ -4,7 +4,7 @@
 //
 
 //
-// NtPath
+// NtPath Functions
 //
 EXTERN_C
 UINT
@@ -64,7 +64,9 @@ _HasPrefix(
 	PCWSTR pszPrefix,
 	PCWSTR pszPath
 	);
-
+//
+// Reparse Point
+//
 typedef struct _FS_REPARSE_POINT_INFORMATION_EX
 {
 	ULONG Flags;
@@ -103,3 +105,63 @@ typedef struct _FS_REPARSE_POINT_INFORMATION_EX
 	};
 } FS_REPARSE_POINT_INFORMATION_EX;
 
+//
+// Wof
+//
+#include "wfswof.h"
+
+//
+// NT/DOS Path Helper
+//
+EXTERN_C
+BOOL
+APIENTRY
+NtPathToDosPath(
+	PCWSTR pszNtPath,
+	PWSTR pszPath,
+	ULONG cchPath
+	);
+
+EXTERN_C
+BOOL
+APIENTRY
+NtPathToDosPathEx(
+	PCWSTR pszNtPath,
+	PWSTR pszPath,
+	ULONG cchPath,
+	ULONG Flags
+	);
+
+EXTERN_C
+BOOL
+APIENTRY
+NtPathToGuidPath(
+	PCWSTR pszNtPath,
+	PWSTR pszPath,
+	ULONG cchPath,
+	ULONG Flags
+	);
+
+#define PATHTYPE_GUID             1
+#define PATHTYPE_DOSNAMESPACE     2
+#define PATHTYPE_DOSDRIVE         3
+
+#define PTF_GUID                   0x1
+#define PTF_DOSDRIVE               0x2
+#define PTF_DOSNAMESPACE           0x4
+#define PTF_TYPE_MASK              (0x1|0x2|0x4)
+#define PTF_NTDOSNAMESPACEPREFIX   0x100
+#define PTF_NTWIN32NAMESPACEPREFIX PTF_NTDOSNAMESPACEPREFIX
+#define PTF_WIN32PATHPREFIX        0x200
+#define PTF_PREFIX_MASK            (0x100|0x200)
+#define PTF_NO_PREFIX              0x0
+
+EXTERN_C
+BOOL
+APIENTRY
+NtPathTranslatePath(
+	PCWSTR pszNtPath,
+	ULONG Flags,
+	PWSTR pszPath,
+	ULONG cchPath
+	);

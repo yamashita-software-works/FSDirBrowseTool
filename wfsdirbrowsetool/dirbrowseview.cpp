@@ -23,22 +23,22 @@ enum {
 	MAX_INFO_VIEW_TYPE,
 };
 
-class CFileInfoBase : 
+class CFileViewBase : 
 	public CBaseWindow,
-	public IFileInfoBaseWindow
+	public IFileViewBaseWindow
 {
 	CPageWndBase *m_pBase;
 	CPageWndBase *m_pViewTable[MAX_INFO_VIEW_TYPE];
 
 public:
-	CFileInfoBase()
+	CFileViewBase()
 	{
 		m_hWnd = NULL;
 		m_pBase = NULL;
 		memset(m_pViewTable,0,sizeof(m_pViewTable));
 	}
 
-	virtual ~CFileInfoBase()
+	virtual ~CFileViewBase()
 	{
 	}
 
@@ -58,7 +58,7 @@ public:
 
 	LRESULT OnCreate(HWND hWnd,UINT,WPARAM,LPARAM lParam)
 	{
-		SetWindowText(hWnd,L"CFileInfoBase");
+		SetWindowText(hWnd,L"CFileViewBase");
 		return 0;
 	}
 
@@ -223,13 +223,13 @@ public:
 //  C style functions
 //
 
-HRESULT FileInfoBase_CreateObject(HINSTANCE hInstance,IFileInfoBaseWindow **pObject)
+HRESULT FileViewBase_CreateObject(HINSTANCE hInstance,IFileViewBaseWindow **pObject)
 {
-	CFileInfoBase *pWnd = new CFileInfoBase;
+	CFileViewBase *pWnd = new CFileViewBase;
 
-	CFileInfoBase::RegisterClass(hInstance);
+	CFileViewBase::RegisterClass(hInstance);
 
-	*pObject = static_cast<IFileInfoBaseWindow *>(pWnd);
+	*pObject = static_cast<IFileViewBaseWindow *>(pWnd);
 
 	return S_OK;
 }

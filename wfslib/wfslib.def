@@ -10,4 +10,8 @@ EXPORTS
 	_HasPrefix
 	NtStatusToDosError = ntdll.RtlNtStatusToDosError
 	NtStatusToWin32Error = ntdll.RtlNtStatusToDosError
-
+;	
+	NtPathToDosPath
+	NtPathToDosPathEx
+	NtPathToGuidPath
+	NtPathTranslatePath

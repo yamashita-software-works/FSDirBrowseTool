@@ -14,13 +14,22 @@
 #define CALLBACK __stdcall
 #endif
 
+#ifndef _USE_INTERNAL_MEMORY_DEBUG
+#define _USE_INTERNAL_MEMORY_DEBUG  0
+#endif
+
 #ifdef __cplusplus
 extern "C" {
+#endif
+#if _USE_INTERNAL_MEMORY_DEBUG
+PVOID NTAPI _DebugAllocMemory(SIZE_T cb);
+PVOID NTAPI _DebugReallocMemory(PVOID pv,SIZE_T cb);
+VOID  NTAPI _DebugFreeMemory(PVOID ptr);
 #endif
 PVOID NTAPI AllocMemory(SIZE_T cb);
 PVOID NTAPI ReAllocateHeap(PVOID pv,SIZE_T cb);
 #define ReallocMemory(pv,cb) ReAllocateHeap(pv,cb)
-VOID  NTAPI FreeMemory(PVOID ptr);
+VOID NTAPI FreeMemory(PVOID ptr);
 NTSTATUS NTAPI AllocateUnicodeString(UNICODE_STRING *pus,PCWSTR psz);
 NTSTATUS NTAPI DuplicateUnicodeString(UNICODE_STRING *pusDup,UNICODE_STRING *pusSrc);
 NTSTATUS NTAPI AllocateUnicodeStringCbBuffer(UNICODE_STRING *pus,ULONG cb);
@@ -34,9 +43,10 @@ BOOLEAN IsNtDevicePath(PCWSTR pszPath);
 BOOLEAN HasPrefix(PCWSTR pszPrefix,PCWSTR pszPath);
 BOOLEAN HasPrefix_U(PCWSTR pszPrefix,UNICODE_STRING *String);
 BOOLEAN HasWildCardChar_U(UNICODE_STRING *String);
-NTSTATUS GetFileNamePart_U(UNICODE_STRING *FilePath,UNICODE_STRING *FileName);
-NTSTATUS SplitPathFileName_U(UNICODE_STRING *Path,UNICODE_STRING *FileName);
-BOOLEAN SplitRootRelativePath(PCWSTR pszFullPath,UNICODE_STRING *RootDirectory,UNICODE_STRING *RootRelativePath);
+NTSTATUS GetFileNamePart_U(__in UNICODE_STRING *FilePath,__out UNICODE_STRING *FileName);
+NTSTATUS SplitPathFileName_U(__inout UNICODE_STRING *Path,__out UNICODE_STRING *FileName);
+BOOLEAN SplitRootRelativePath(__in PCWSTR pszFullPath,__out UNICODE_STRING *RootDirectory,__out UNICODE_STRING *RootRelativePath);
+BOOLEAN SplitVolumeRelativePath(__in PCWSTR pszFullPath,__out UNICODE_STRING *VolumeName,__out UNICODE_STRING *VolumeRelativePath);
 BOOLEAN IsRelativePath(PCWSTR pszPath);
 BOOLEAN PathFileExists_U(UNICODE_STRING *pusPath,ULONG *FileAttributes);
 BOOLEAN PathFileExists_UEx(HANDLE hParentDir,UNICODE_STRING *pusPath,ULONG *FileAttributes);
@@ -217,7 +227,9 @@ StringFromGUID(
     __in  int cchMax
     );
 
-#define LPWSTR_GLOBALROOTPREFIX  L"\\??\\"
+#define LPWSTR_GLOBALROOTPREFIX      L"\\??\\GlobalRoot"
+#define LPWSTR_GLOBALROOTPREFIX_W32  L"\\\\?\\GlobalRoot"
+#define LPWSTR_DOSNAMESPACEPREFIX    L"\\??\\"
 
 // A string minimum length of 6 characters need.
 #define PathIsGlobalRootPrefixDosDrive(p) \

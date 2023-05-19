@@ -24,7 +24,7 @@ class CDirectoryBrowserHost : public CBaseWindow
 public:
 	HWND m_hWndTreeBase;
 
-	IFileInfoBaseWindow *m_pFileInfoWnd;
+	IFileViewBaseWindow *m_pFileViewWnd;
 	int m_cxSplitPos;
 
 	HWND m_hWndCtrlFocus;
@@ -33,7 +33,7 @@ public:
 	{
 		m_hWnd = NULL;
 		m_hWndTreeBase = NULL;
-		m_pFileInfoWnd = NULL;
+		m_pFileViewWnd = NULL;
 		m_cxSplitPos = 320;
 		m_hWndCtrlFocus = NULL;
 	}
@@ -46,19 +46,27 @@ public:
 		DirectoryTraverser_CreateWindow(hWnd,&m_hWndTreeBase);
 
 		// Create information view host frame window
-		FileInfoBase_CreateObject(GETINSTANCE(m_hWnd),&m_pFileInfoWnd);
-		m_pFileInfoWnd->Create(hWnd);
+		FileViewBase_CreateObject(GETINSTANCE(m_hWnd),&m_pFileViewWnd);
+		m_pFileViewWnd->Create(hWnd);
 
-#if _ENABLE_SUBPANE
-		m_pSubPane = new CSubPane;
-		m_pSubPane->Create(m_hWnd,0,0,WS_CHILD|WS_VISIBLE|WS_CLIPCHILDREN,WS_EX_CONTROLPARENT);
-#endif
+		//++todo:
+	    SHSTOCKICONINFO sii = {0};
+		sii.cbSize = sizeof(sii);
+		SHGetStockIconInfo(SIID_FOLDEROPEN,SHGSI_ICON|SHGSI_SMALLICON|SHGSI_SHELLICONSIZE,&sii);
+		DestroyIcon((HICON)SendMessage(GetParent(m_hWnd),WM_GETICON,ICON_SMALL,0));
+		SendMessage(GetParent(m_hWnd),WM_SETICON,ICON_SMALL,(LPARAM)sii.hIcon);
+		//--todo:
+
 		return 0;
 	}
 
 	LRESULT OnDestroy(HWND,UINT,WPARAM,LPARAM)
 	{
-		m_pFileInfoWnd->Destroy();
+		//++todo:
+		DestroyIcon((HICON)SendMessage(GetParent(m_hWnd),WM_GETICON,ICON_SMALL,0));
+		//--todo:
+
+		m_pFileViewWnd->Destroy();
 		return 0;
 	}
 
@@ -154,15 +162,15 @@ public:
 		if( m_hWndTreeBase )
 			DeferWindowPos(hdwp,m_hWndTreeBase,NULL,0,0,m_cxSplitPos,cy,SWP_NOZORDER);
 
-		if( m_pFileInfoWnd )
-			DeferWindowPos(hdwp,m_pFileInfoWnd->GetHWND(),NULL,m_cxSplitPos,0,cx-m_cxSplitPos,cy,SWP_NOZORDER);
+		if( m_pFileViewWnd )
+			DeferWindowPos(hdwp,m_pFileViewWnd->GetHWND(),NULL,m_cxSplitPos,0,cx-m_cxSplitPos,cy,SWP_NOZORDER);
 
 		EndDeferWindowPos(hdwp);
 	}
 
 	VOID OnUpdateInformationView(SELECT_FILE* pFile)
 	{
-		m_pFileInfoWnd->SelectData(pFile);
+		m_pFileViewWnd->SelectData(pFile);
 	}
 
 	VOID OnChangeDirectory(SELECT_FILE* pFile)
@@ -198,7 +206,7 @@ public:
 	VOID InitLayout(const RECT *prcDesktopWorkArea)
 	{
 		DirectoryTraverser_InitLayout(m_hWndTreeBase,NULL);
-		m_pFileInfoWnd->InitLayout(NULL);
+		m_pFileViewWnd->InitLayout(NULL);
 	}
 
 	VOID FillTraversetItems(PCWSTR pszDirectoryPath)

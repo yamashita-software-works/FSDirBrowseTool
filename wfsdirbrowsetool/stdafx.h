@@ -115,6 +115,7 @@ enum {
 	TitleDomainId,                // 24
 	TitleFileId,                  // 25
 	TitleLocation,                // 26
+	TitleWofItem,                 // 27
 	TitleCount,
 	TitleTableSize = TitleCount,
 };
@@ -155,3 +156,6 @@ typedef struct _SELECT_TITLE
 	UINT TitleId;
 	FILE_INFORMATION_STRUCT *pFileInfo;
 } SELECT_TITLE;
+
+HIMAGELIST DIRBGetShareImageList();
+INT DIRBGetUpDirImageIndex();

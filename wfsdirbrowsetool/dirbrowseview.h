@@ -4,7 +4,7 @@
 #include "page_root.h"
 #include "page_fileinfo.h"
 
-interface IFileInfoBaseWindow
+interface IFileViewBaseWindow
 {
 	virtual HWND GetHWND() const = 0;
 	virtual HRESULT Create(HWND hWnd,HWND *phWndFileList=NULL) = 0;
@@ -14,4 +14,4 @@ interface IFileInfoBaseWindow
 	virtual HRESULT SelectData(SELECT_FILE *Path) = 0;
 };
 
-HRESULT FileInfoBase_CreateObject(HINSTANCE hInstance,IFileInfoBaseWindow **pObject);
+HRESULT FileViewBase_CreateObject(HINSTANCE hInstance,IFileViewBaseWindow **pObject);

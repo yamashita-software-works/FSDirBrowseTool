@@ -372,20 +372,20 @@ VOID WINAPI _GetDateTimeStringEx2(ULONG64 DateTime,LPTSTR pszText,int cchTextMax
 		WCHAR szMilliseconds[16];
 		int cchMilliseconds;
 
-		WCHAR *p = wcschr(pszText,L'n');
+		WCHAR *p = _tcschr(pszText,TEXT('n'));
 		if( p )
 		{
-			WCHAR *pMilliseconds = p;
+			TCHAR *pMilliseconds = p;
 			// count 'n' characters
-			while( *p == L'n' ) p++;
+			while( *p == TEXT('n') ) p++;
 			int cch100ns = (int)(p - pMilliseconds);
 
 			if( cch100ns > 0 && ((3 <= cch100ns) && (cch100ns <= 7)))
 			{
 #if 0
-				cchMilliseconds = wsprintf(szMilliseconds,L"%03u",st.wMilliseconds);  // display  1ms "000"
+				cchMilliseconds = wsprintf(szMilliseconds,TEXT("%03u"),st.wMilliseconds);  // display  1ms "000"
 #else
-				cchMilliseconds = wsprintf(szMilliseconds,L"%07u",(UINT)liLts.QuadPart); // display 100ns "0000000"
+				cchMilliseconds = wsprintf(szMilliseconds,TEXT("%07u"),(UINT)liLts.QuadPart); // display 100ns "0000000"
 #endif
 				int i;
 				for(i = 0; i < cch100ns; i++)
@@ -398,7 +398,7 @@ VOID WINAPI _GetDateTimeStringEx2(ULONG64 DateTime,LPTSTR pszText,int cchTextMax
 		{
 			if( (cch + 3) < cchTextMax )
 			{
-				cch += wsprintf(szMilliseconds,L".%03u",st.wMilliseconds);
+				cch += wsprintf(szMilliseconds,TEXT(".%03u"),st.wMilliseconds);
 				wcscat_s(pszText,cchTextMax,szMilliseconds);
 			}
 		}

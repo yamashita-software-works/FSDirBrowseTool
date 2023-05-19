@@ -158,6 +158,7 @@ public:
 
 	LRESULT OnDisp_ShortName(UINT,NMLVDISPINFO *pnmlvdi)
 	{
+		pnmlvdi->item.pszText = L"-";
 		FILE_INFORMATION_STRUCT *pFI = m_pFI;
 		if( pFI->ShortName && *pFI->ShortName != UNICODE_NULL )
 			pnmlvdi->item.pszText = PathFindFileName(pFI->ShortName);
@@ -166,9 +167,12 @@ public:
 
 	LRESULT OnDisp_Extension(UINT,NMLVDISPINFO *pnmlvdi)
 	{
+		*pnmlvdi->item.pszText = 0;
 		FILE_INFORMATION_STRUCT *pFI = m_pFI;
 		if( (pFI->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0)
 			pnmlvdi->item.pszText = PathFindExtension(pFI->Name);
+		if( *pnmlvdi->item.pszText == 0 )
+			pnmlvdi->item.pszText = L"-";
 		return 0;
 	}
 
@@ -304,7 +308,7 @@ public:
 	LRESULT OnDisp_FileId(UINT id,NMLVDISPINFO *pnmlvdi)
 	{
 		FILE_INFORMATION_STRUCT *pFI = m_pFI;
-		pnmlvdi->item.pszText = L""; // todo:
+		StringCchPrintf(pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,L"0x%016I64X",pFI->FileReferenceNumber.QuadPart);
 		return 0;
 	}
 	
@@ -312,6 +316,50 @@ public:
 	{
 		FILE_INFORMATION_STRUCT *pFI = m_pFI;
 		pnmlvdi->item.pszText = L""; // todo:
+		return 0;
+	}
+
+	LRESULT OnDisp_Wof(UINT id,NMLVDISPINFO *pnmlvdi)
+	{
+		FILE_INFORMATION_STRUCT *pFI = m_pFI;
+		if( pFI->State.Wof )
+		{
+			if( pFI->Wof.ExternalInfo->Provider == WOF_PROVIDER_WIM )
+			{
+				StringCchPrintf(pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,L"WIM backing up: 0x%X 0x%X 0x%X",pFI->Wof.WimInfo->DataSourceId,pFI->Wof.WimInfo->ResourceHash,pFI->Wof.WimInfo->Flags);
+			}
+			else if( pFI->Wof.ExternalInfo->Provider == WOF_PROVIDER_FILE )
+			{
+				PWSTR psz = NULL;
+				switch(pFI->Wof.FileInfo->Algorithm)
+				{
+					case FILE_PROVIDER_COMPRESSION_XPRESS4K:
+						psz = L"XPRESS4K";
+						break;
+					case FILE_PROVIDER_COMPRESSION_LZX:
+						psz = L"LZX";
+						break;
+					case FILE_PROVIDER_COMPRESSION_XPRESS8K:
+						psz = L"XPRESS8K";
+						break;
+					case FILE_PROVIDER_COMPRESSION_XPRESS16K:
+						psz = L"XPRESS16K";
+						break;
+				}
+				if( psz )
+					StringCchPrintf(pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,L"File backing up: %s",psz);
+				else
+					StringCchPrintf(pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,L"File backing up: 0x%X 0x%X",pFI->Wof.FileInfo->Algorithm,pFI->Wof.FileInfo->Flags);
+			}
+			else
+			{
+				StringCchPrintf(pnmlvdi->item.pszText,pnmlvdi->item.cchTextMax,L"Unknown Provider 0x%X",pFI->Wof.ExternalInfo->Provider);
+			}
+		}
+		else
+		{
+			pnmlvdi->item.pszText = L"-";
+		}
 		return 0;
 	}
 
@@ -346,6 +394,7 @@ public:
 			ITEMDISP_HANDLER_MAP_DEF(TitleDomainId,               &CFileInfoView::OnDisp_ObjectId),
 			ITEMDISP_HANDLER_MAP_DEF(TitleLocation,               &CFileInfoView::OnDisp_Location),
 			ITEMDISP_HANDLER_MAP_DEF(TitleFileId,                 &CFileInfoView::OnDisp_FileId),
+			ITEMDISP_HANDLER_MAP_DEF(TitleWofItem,                &CFileInfoView::OnDisp_Wof),
 		};
 		int cTableSize = TitleTableSize;
 		pch = new _ITEMDISP_HANDLER_DEF<CFileInfoView>[ cTableSize ];
@@ -531,7 +580,6 @@ public:
 			{ L"Short Name",               TitleShortName,          ID_GROUP_NAME },
 			{ L"Extension",                TitleExtension,          ID_GROUP_NAME },
 //			{ L"Location",                 TitleLocation,           ID_GROUP_NAME },
-//			{ L"File Id",                  TitleFileId,             ID_GROUP_NAME },
 
 			{ L"File Attributes",          TitleAttributes,         ID_GROUP_ATTRIBUTES },
 
@@ -548,10 +596,12 @@ public:
 			{ L"Birth Object Id",          TitleBirthObjectId,      ID_GROUP_OBJECTID },
 			{ L"Domain Id",                TitleDomainId,           ID_GROUP_OBJECTID },
 
+			{ L"File Reference Number",    TitleFileId,             ID_GROUP_OTHERS },
 			{ L"EA Data",                  TitleEAData,             ID_GROUP_OTHERS },
 			{ L"Number of HardLink",       TitleNumberOfHardLink,   ID_GROUP_OTHERS },
 			{ L"Directory",                TitleDirectory,          ID_GROUP_OTHERS },
 			{ L"Delete Pending",           TitleDeletePending,      ID_GROUP_OTHERS },
+			{ L"Overlay File",             TitleWofItem,            ID_GROUP_OTHERS },
 		};
 
 
@@ -626,13 +676,14 @@ public:
 			FillItemTitles();
 		}
 
+		//
+		// Open File
+		//
 		HANDLE hFile;
 
 		ULONG DesiredAccess = 0;
 		ULONG ShareAccess = 0;
 		ULONG OpenOptions = 0;
-
-		DesiredAccess = FILE_READ_ATTRIBUTES|FILE_READ_EA|READ_CONTROL|FILE_TRAVERSE|SYNCHRONIZE;
 
 		// FILE_READ_DATA             file
 		// FILE_LIST_DIRECTORY        directory
@@ -661,6 +712,8 @@ public:
 		// GENERIC_ALL                      (0x10000000L)
 		// STANDARD_RIGHTS_REQUIRED         (0x000F0000L)
 
+		DesiredAccess = FILE_READ_ATTRIBUTES|FILE_READ_EA|READ_CONTROL|SYNCHRONIZE;
+
 		ShareAccess = FILE_SHARE_READ|FILE_SHARE_WRITE;
 
 		OpenOptions = FILE_OPEN_FOR_BACKUP_INTENT|FILE_SYNCHRONOUS_IO_NONALERT|FILE_OPEN_REPARSE_POINT;
@@ -669,7 +722,7 @@ public:
 		{
 			NTFile_FreeFileInformation( m_pFI );
 
-			NTFile_CollectFileInformation(hFile,&m_pFI);
+			NTFile_GatherFileInformation(hFile,&m_pFI);
 
 			NTFile_CloseFile(hFile);
 		}
@@ -679,6 +732,21 @@ public:
 			m_pFI = NULL;
 		}
 
+		//
+		// Open Directory
+		//
+#if 0 // Reserved
+		HANDLE hDirectory;
+
+		DesiredAccess = FILE_READ_ATTRIBUTES|FILE_TRAVERSE|SYNCHRONIZE;
+
+		OpenOptions = FILE_OPEN_FOR_BACKUP_INTENT|FILE_SYNCHRONOUS_IO_NONALERT|FILE_OPEN_REPARSE_POINT|FILE_DIRECTORY_FILE;
+
+		if( NTFile_OpenFile(&hDirectory,pFile->pszLocation,DesiredAccess,ShareAccess,OpenOptions) == S_OK )
+		{
+			NTFile_CloseFile(hDirectory);
+		}
+#endif
 		if( GetGroupItemCount(ID_GROUP_ALTSTREAMS) > 0 )
 			DeleteGroupItems(ID_GROUP_ALTSTREAMS);
 		if( GetGroupItemCount(ID_GROUP_REPARSEPOINT) > 0 )

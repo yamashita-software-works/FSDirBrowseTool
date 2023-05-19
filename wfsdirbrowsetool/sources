@@ -82,15 +82,6 @@ C_DEFINES=$(C_DEFINES)
 C_DEFINES=$(C_DEFINES) -D_DEBUG -DDEBUG
 !endif
 
-#
-# use provisional dll.
-#
-!if defined(_USE_FSLIB)
-C_DEFINES=$(C_DEFINES) -D_ENABLE_USE_FSLIB=1
-!else
-C_DEFINES=$(C_DEFINES) -D_ENABLE_USE_FSLIB=0
-!endif
-
 INCLUDES=$(INCLUDES);C:\WinDDK\7600.16385.1\inc\ddk
 INCLUDES=$(INCLUDES);C:\WinDDK\7600.16385.1\inc\crt
 INCLUDES=$(INCLUDES);C:\WinDDK\7600.16385.1\inc\api
@@ -106,7 +97,6 @@ INCLUDES=$(INCLUDES);..\inc
 #----------------------------------------------------------
 SOURCES = \
 	dllmain.cpp \
-	mainframe.cpp \
 	dirbrowsehost.cpp\
 	dirbrowsetraverser.cpp\
 	dirbrowseview.cpp\

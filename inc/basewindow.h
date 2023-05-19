@@ -80,7 +80,7 @@ public:
 		wndClass.hCursor       = LoadCursor(NULL,IDC_ARROW);
 	    wndClass.hInstance     = hInstance;
 		wndClass.lpfnWndProc   = CBaseWindow::_wndProc;
-	    wndClass.hIcon         = LoadIcon(NULL,IDI_APPLICATION);
+	    wndClass.hIcon         = NULL;
 		wndClass.hbrBackground = (HBRUSH)(COLOR_WINDOW+1);
 	    wndClass.lpszMenuName  = NULL;
 		wndClass.lpszClassName = WC_CLASSNAME;
