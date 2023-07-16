@@ -1,25 +1,13 @@
 #pragma once
+//
+// WM_QUERY_CMDSTATE
+//
+#define WM_QUERY_CMDSTATE   (WM_APP+1000)
 
-typedef struct _FILEITEMHEADER
-{
-	ULONG Reserved;
-	PWSTR Path;
-	PWSTR FileName;
-} FILEITEMHEADER;
-
-typedef struct _FILEITEM
-{
-	FILEITEMHEADER hdr;
-    LARGE_INTEGER CreationTime;
-    LARGE_INTEGER LastAccessTime;
-    LARGE_INTEGER LastWriteTime;
-    LARGE_INTEGER ChangeTime;
-    LARGE_INTEGER EndOfFile;
-    LARGE_INTEGER AllocationSize;
-    ULONG FileAttributes;
-    ULONG FileNameLength;
-    ULONG EaSize;
-    ULONG FileIndex;
-    LARGE_INTEGER FileId;
-    WCHAR ShortName[14];
-} FILEITEM,*PFILEITEM;
+enum {
+    UPDUI_ENABLED  = 0x00000000,
+    UPDUI_DISABLED = 0x00000100,
+    UPDUI_CHECKED  = 0x00000200,
+    UPDUI_CHECKED2 = 0x00000400,
+    UPDUI_RADIO	   = 0x00000800,
+};

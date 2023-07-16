@@ -12,6 +12,7 @@ interface IFileViewBaseWindow
 	virtual HRESULT InitData() = 0;
 	virtual HRESULT InitLayout(const RECT *prc) = 0;
 	virtual HRESULT SelectData(SELECT_FILE *Path) = 0;
+	virtual HRESULT QueryCmdState(UINT CmdId,UINT *State) = 0;
 };
 
 HRESULT FileViewBase_CreateObject(HINSTANCE hInstance,IFileViewBaseWindow **pObject);

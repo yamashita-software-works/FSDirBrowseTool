@@ -62,12 +62,12 @@ InitDirectoryBrowseTool(
 static HIMAGELIST m_himl = NULL;
 static int m_iImageUpDir = I_IMAGENONE;
 
-INT DIRBGetUpDirImageIndex()
+INT GetUpDirImageIndex()
 {
 	return m_iImageUpDir;
 }
 
-HIMAGELIST DIRBGetShareImageList()
+HIMAGELIST GetGlobalShareImageList()
 {
 	if( m_himl == NULL )
 	{

@@ -50,11 +50,6 @@ LRESULT CALLBACK MDIChildWndProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 
 			MDICLIENTWNDDATA *pd = new MDICLIENTWNDDATA;
 			SetWindowLongPtr(hWnd,GWLP_USERDATA,(LONG_PTR)pd);
-
-			pd->hWndView = CreateDirectoryBrowseTool(hWnd);
-			pd->hWndFocus = NULL;
-			InitDirectoryBrowseTool(pd->hWndView,pmcp->pszInitialPath,NULL);
-
 			break;
 		}
 		case WM_NCDESTROY:

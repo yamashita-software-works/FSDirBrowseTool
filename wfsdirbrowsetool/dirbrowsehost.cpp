@@ -43,7 +43,7 @@ public:
 		m_hWnd = hWnd;
 
 		// Create item tree view window
-		DirectoryTraverser_CreateWindow(hWnd,&m_hWndTreeBase);
+		DirectoryTraverser_CreateWindow(hWnd,&m_hWndTreeBase,DTS_DIRECTORYNAMES|DTS_FILENAMES);
 
 		// Create information view host frame window
 		FileViewBase_CreateObject(GETINSTANCE(m_hWnd),&m_pFileViewWnd);
@@ -112,6 +112,24 @@ public:
 			case ID_UP_DIR:
 				DirectoryTraverser_SelectFolder(m_hWndTreeBase,L"..",0);
 				break;
+			case ID_EDIT_COPY:
+				if( m_hWndCtrlFocus == m_pFileViewWnd->GetHWND() )
+					Sleep(0);
+				break;
+		}
+		return 0;
+	}
+
+	LRESULT OnQueryCmdState(HWND,UINT,WPARAM wParam,LPARAM lParam)
+	{
+		if( m_hWndCtrlFocus == m_pFileViewWnd->GetHWND() )
+		{
+			ASSERT( lParam != NULL );
+			if( lParam )
+			{
+				if( m_pFileViewWnd->QueryCmdState((UINT)LOWORD(wParam),(UINT*)lParam) == S_OK )
+					return TRUE;
+			}
 		}
 		return 0;
 	}
@@ -137,20 +155,22 @@ public:
 	{
 		switch(uMsg)
 	    {
-		    case WM_CREATE:
-				return OnCreate(hWnd,uMsg,wParam,lParam);
-	        case WM_COMMAND:
-				return OnCommand(hWnd,uMsg,wParam,lParam);
-			case WM_DESTROY:
-				return OnDestroy(hWnd,uMsg,wParam,lParam);
-		    case WM_SIZE:
-				return OnSize(hWnd,uMsg,wParam,lParam);
-			case WM_CONTROL_MESSAGE:
-				return OnControlMessage(hWnd,uMsg,wParam,lParam);
-			case WM_SETFOCUS:
-				return OnSetFocus(hWnd,uMsg,wParam,lParam);
 			case WM_NOTIFY:
 				return OnNotify(hWnd,uMsg,wParam,lParam);
+		    case WM_SIZE:
+				return OnSize(hWnd,uMsg,wParam,lParam);
+			case WM_QUERY_CMDSTATE:
+				return OnQueryCmdState(hWnd,uMsg,wParam,lParam);
+			case WM_CONTROL_MESSAGE:
+				return OnControlMessage(hWnd,uMsg,wParam,lParam);
+			case WM_COMMAND:
+				return OnCommand(hWnd,uMsg,wParam,lParam);
+			case WM_SETFOCUS:
+				return OnSetFocus(hWnd,uMsg,wParam,lParam);
+			case WM_DESTROY:
+				return OnDestroy(hWnd,uMsg,wParam,lParam);
+		    case WM_CREATE:
+				return OnCreate(hWnd,uMsg,wParam,lParam);
 		}
 		return CBaseWindow::WndProc(hWnd,uMsg,wParam,lParam);
 	}
@@ -227,7 +247,7 @@ HWND DirectoryBrowseTool_CreateWindow(HWND hWndParent)
 
 	CDirectoryBrowserHost *pView = new CDirectoryBrowserHost;
 
-	return pView->Create(hWndParent,0,L"DirectoryBrowseToolHostWnd",WS_CHILD|WS_VISIBLE|WS_CLIPCHILDREN,WS_EX_CONTROLPARENT);
+	return pView->Create(hWndParent,0,L"DirectoryFilePropertyBrowserWnd",WS_CHILD|WS_VISIBLE|WS_CLIPCHILDREN,WS_EX_CONTROLPARENT);
 }
 
 VOID DirectoryBrowseTool_InitData(HWND hWndViewHost,PCWSTR pszDirectoryPath)

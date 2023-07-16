@@ -7,6 +7,15 @@
 EXTERN_C
 NTSTATUS
 NTAPI
+OpenVolume_U(
+    UNICODE_STRING *pusVolumeName,
+    ULONG Flags,
+    HANDLE *pHandle
+    );
+
+EXTERN_C
+NTSTATUS
+NTAPI
 OpenVolume(
     PCWSTR VolumeName,
     ULONG Flags,

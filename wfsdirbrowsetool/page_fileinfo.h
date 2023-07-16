@@ -62,7 +62,7 @@ public:
 	{
 		m_hWndList = CreateWindow(WC_LISTVIEW, 
                               L"", 
-                              WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_TABSTOP | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER | LVS_SINGLESEL, 
+                              WS_CHILD | WS_VISIBLE | WS_CLIPCHILDREN | WS_TABSTOP | LVS_REPORT | LVS_SHOWSELALWAYS | LVS_NOSORTHEADER,// | LVS_SINGLESEL, 
                               0,0,0,0,
                               hWnd,
                               (HMENU)0,
@@ -80,6 +80,12 @@ public:
 		int cx = GET_X_LPARAM(lParam);
 		int cy = GET_Y_LPARAM(lParam);
 		UpdateLayout(cx,cy);
+		return 0;
+	}
+
+	LRESULT OnSetFocus(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		SetFocus(m_hWndList);
 		return 0;
 	}
 
@@ -145,6 +151,8 @@ public:
 
 	LRESULT OnNmSetFocus(NMHDR *pnmhdr)
 	{
+		pnmhdr->hwndFrom = m_hWnd;
+		pnmhdr->idFrom = GetWindowLong(m_hWnd,GWL_ID);
 		SendMessage(GetParent(m_hWnd),WM_NOTIFY,0,(LPARAM)pnmhdr);
 		return 0;
 	}
@@ -457,6 +465,8 @@ public:
 				return OnSize(hWnd,uMsg,wParam,lParam);
 			case WM_NOTIFY:
 				return OnNotify(hWnd,uMsg,wParam,lParam);
+			case WM_SETFOCUS:
+				return OnSetFocus(hWnd,uMsg,wParam,lParam);
 			case WM_CREATE:
 				return OnCreate(hWnd,uMsg,wParam,lParam);
 		}
@@ -924,4 +934,20 @@ public:
 	{
 		return FillItems((SELECT_FILE*)pFile);
 	}	
+
+	virtual HRESULT CommandHandler(UINT CmdId)
+	{
+		return E_NOTIMPL;
+	}
+
+	virtual HRESULT QueryCmdState(UINT CmdId,UINT *State)
+	{
+		switch( CmdId )
+		{
+			case ID_EDIT_COPY:
+				*State = ListView_GetSelectedCount(m_hWndList) ? 0x0 : 0x100;
+				return S_OK;
+		}
+		return S_FALSE;
+	}
 };

@@ -20,6 +20,7 @@
 enum {
 	INFOVIEW_ROOT = 0,
 	INFOVIEW_FILEINFO,
+	INFOVIEW_FILELIST,
 	MAX_INFO_VIEW_TYPE,
 };
 
@@ -73,6 +74,13 @@ public:
 		return 0;
 	}
 
+	LRESULT OnSetFocus(HWND,UINT,WPARAM,LPARAM lParam)
+	{
+		if( m_pBase )
+			SetFocus(m_pBase->GetHwnd());
+		return 0;
+	}
+
 	LRESULT OnNotify(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		NMHDR *pnmhdr = (NMHDR *)lParam;
@@ -86,6 +94,8 @@ public:
 
 	LRESULT OnNmSetFocus(NMHDR *pnmhdr)
 	{
+		pnmhdr->hwndFrom = m_hWnd;
+		pnmhdr->idFrom = GetWindowLong(m_hWnd,GWL_ID);
 		SendMessage(GetParent(m_hWnd),WM_NOTIFY,0,(LPARAM)pnmhdr);
 		return 0;
 	}
@@ -132,17 +142,19 @@ public:
 			return nView;
 		}
 	
-		EnableWindow(pNew->m_hWnd,TRUE);
-		ShowWindow(pNew->m_hWnd,SW_SHOWNA);
-		if( m_pBase )
-		{
-			ShowWindow(m_pBase->m_hWnd,SW_HIDE);
-			EnableWindow(m_pBase->m_hWnd,FALSE);
-		}
+		CPageWndBase* pPrev = m_pBase;
 
 		m_pBase = pNew;
-
 		UpdateLayout();
+
+		EnableWindow(pNew->m_hWnd,TRUE);
+		ShowWindow(pNew->m_hWnd,SW_SHOWNA);
+
+		if( pPrev )
+		{
+			ShowWindow(pPrev->m_hWnd,SW_HIDE);
+			EnableWindow(pPrev->m_hWnd,FALSE);
+		}
 
 		return nView;
 	}
@@ -162,6 +174,8 @@ public:
 				return OnNotify(hWnd,uMsg,wParam,lParam);
 			case WM_SIZE:
 				return OnSize(hWnd,uMsg,wParam,lParam);
+			case WM_SETFOCUS:
+				return OnSetFocus(hWnd,uMsg,wParam,lParam);
 		    case WM_CREATE:
 				return OnCreate(hWnd,uMsg,wParam,lParam);
 			case WM_DESTROY:
@@ -203,8 +217,8 @@ public:
 			case ITEM_FOLDER_ROOT:
 				SelectView( INFOVIEW_ROOT );
 				break;
-			case ITEM_FOLDER_PATH:
-			case ITEM_FOLDER_NAME:
+			case ITEM_FOLDER_DIRECTORY:
+			case ITEM_FOLDER_FILENAME:
 				SelectView( INFOVIEW_FILEINFO );
 				break;
 		}
@@ -214,6 +228,11 @@ public:
 		UpdateLayout();
 
 		return S_OK;
+	}
+
+	virtual HRESULT QueryCmdState(UINT CmdId,UINT *State)
+	{
+		return m_pBase->QueryCmdState(CmdId,State);
 	}
 };
 

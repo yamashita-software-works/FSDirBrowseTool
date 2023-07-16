@@ -158,7 +158,7 @@ NtPathQueryVolumeDeviceName(
 {
 	UNICODE_STRING us;
 	RtlInitUnicodeString(&us,pszGrobalRootPrefixedPath);
-	if( PathIsGlobalRootPrefix_U(&us) )
+	if( PathIsPrefixDosDevice_U(&us) )
 	{
 		GetVolumeName_U(&us);
 		QuerySymbolicLinkObject(NULL,NULL,&us,pszBuffer,cchBuffer);

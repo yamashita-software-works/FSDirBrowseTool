@@ -106,9 +106,13 @@ typedef struct _FS_REPARSE_POINT_INFORMATION_EX
 } FS_REPARSE_POINT_INFORMATION_EX;
 
 //
-// Wof
+// Wof (Windows Overlay File System)
 //
 #include "wfswof.h"
+
+//
+// Sparse File Range Information
+//
 
 //
 // NT/DOS Path Helper

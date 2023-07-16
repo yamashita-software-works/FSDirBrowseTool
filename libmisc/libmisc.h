@@ -4,11 +4,15 @@
 
 INT
 APIENTRY
-_initialize_libmisc();
+_initialize_libmisc(
+	void
+	);
 
 INT
 APIENTRY
-_uninitialize_libmisc();
+_uninitialize_libmisc(
+	void
+	);
 
 VOID
 WINAPI
@@ -183,3 +187,25 @@ public:
 };
 
 #endif
+
+#define SEPCHAR_TAB    0x1 
+#define SEPCHAR_COMMA  0x2
+#define SEPCHAR_SPACE  0x0
+
+LONG
+WINAPI
+SetClipboardTextFromListView(
+	HWND hwndLV,
+	ULONG Flags
+	);
+
+#define SCTEXT_ANSI      1
+#define SCTEXT_UNICODE   0
+
+LONG
+WINAPI
+SetClipboardText(
+	HWND hwndCilpboardOwner,
+	PVOID pszCopyString,
+	ULONG CodeType
+	);

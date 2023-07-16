@@ -28,7 +28,7 @@ static HWND hWndActiveMDIChild = NULL;
 #if 0
 static HWND hWndFocus = NULL;
 #endif
-static HMENU hMenu = NULL;
+static HMENU hMainMenu = NULL;
 static HMENU hMdiMenu = NULL;
 
 bool __initialize_phase = false;
@@ -76,28 +76,6 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 }
 
 /////////////////////////////////////////////////////////////////////////////////
-
-#if 0
-//---------------------------------------------------------------------------
-//
-//  SaveFocusControl()
-//
-//  PURPOSE: Save focus window handle when to be main frame inactive.
-//
-//---------------------------------------------------------------------------
-BOOL SaveFocusControl()
-{
-	// save focus window if focus is on this window's controls
-	HWND hwnd = GetFocus();
-
-	if (hwnd != NULL )
-	{
-		hWndFocus = hwnd;
-		return TRUE;
-	}
-	return FALSE;
-}
-#endif
 
 //----------------------------------------------------------------------------
 //
@@ -169,6 +147,16 @@ HWND OpenMDIChild(HWND hWnd,PCWSTR pszPath)
 
 		SendMessage(hWndMDIClient,WM_MDISETMENU,(WPARAM)hMdiMenu,0);
 		DrawMenuBar(hWnd);
+
+		MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndMDIChild,GWLP_USERDATA);
+		{
+			pd->hWndView = CreateDirectoryBrowseTool(hwndMDIChild);
+			InitDirectoryBrowseTool(pd->hWndView,mcp.pszInitialPath,NULL);
+
+			RECT rc;
+			GetClientRect(hwndMDIChild,&rc);
+			SetWindowPos(pd->hWndView,NULL,0,0,rc.right-rc.left,rc.bottom-rc.top,SWP_NOZORDER);
+		}
 	}
 
 	return hwndMDIChild;
@@ -224,8 +212,8 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
-	HMENU hMenu = LoadMenu(_GetResourceInstance(),MAKEINTRESOURCE(IDR_MAINFRAME));
-	SetMenu(hWnd,hMenu);
+	hMainMenu = LoadMenu(_GetResourceInstance(),MAKEINTRESOURCE(IDR_MAINFRAME));
+	SetMenu(hWnd,hMainMenu);
 
 	__initialize_phase = true;
 
@@ -262,8 +250,8 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 	UpdateWindow(hWnd);
 
 	// Set focus on active MDI child window.
-	hWndActiveMDIChild = MDIGetActiveChild(hWndMDIClient);
-	SetFocus( hWndActiveMDIChild );
+//	hWndActiveMDIChild = MDIGetActiveChild(hWndMDIClient);
+//	SetFocus( hWndActiveMDIChild );
 
 #if _ENABLE_INITIALIZE_ASYNC_OPEN
 	if( __argc > 1 )
@@ -283,6 +271,38 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 VOID ExitInstance()
 {
 	;
+}
+
+//----------------------------------------------------------------------------
+//
+//  QueryCmdState()
+//
+//  PURPOSE: Query command status.
+//
+//----------------------------------------------------------------------------
+INT CALLBACK QueryCmdState(UINT CmdId,PVOID,LPARAM)
+{
+	HWND hwndMDIChild = MDIGetActiveChild(hWndMDIClient);
+	if( hwndMDIChild )
+	{
+		MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndMDIChild,GWLP_USERDATA);
+		UINT State = 0;
+		if( SendMessage(pd->hWndView,WM_QUERY_CMDSTATE,MAKEWPARAM(CmdId,0),(LPARAM)&State) )
+		{
+			return State;
+		}
+	}
+
+	switch( CmdId )
+	{
+		case ID_FILE_NEW:
+		case ID_FILE_CLOSE:
+		case ID_ABOUT:
+		case ID_EXIT:
+			return UPDUI_ENABLED;
+	}
+
+	return UPDUI_DISABLED;
 }
 
 //----------------------------------------------------------------------------
@@ -324,8 +344,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			switch (wmId)
 			{
 				case ID_FILE_NEW:
-					OpenMDIChild(hWnd,NULL);
+				{
+					HWND hwndChild = OpenMDIChild(hWnd,NULL);
+					if( hwndChild )
+					{
+						MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndChild,GWLP_USERDATA);
+						SetFocus(pd->hWndView);
+					}
 					break;
+				}
 				case ID_FILE_CLOSE:
 					SendMessage(hWndMDIClient, WM_MDIDESTROY, (WPARAM)MDIGetActiveChild(hWndMDIClient), 0L); 
 					break;
@@ -348,20 +375,15 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 			}
 			break;
 		}
-#if 0
-		case WM_ACTIVATE:
-		{
-			int nState = (int)wParam;
-			if (nState == WA_INACTIVE)
-			{
-				SaveFocusControl(); // save focus when frame loses activation
-			}
-			break;
-		}
-#endif
 		case WM_MDIACTIVATE:
 		{
 			hWndActiveMDIChild = (HWND)lParam;
+
+			if( hWndActiveMDIChild == NULL )
+			{
+				SendMessage(hWndMDIClient,WM_MDISETMENU,(WPARAM)hMainMenu,0);
+				DrawMenuBar(hWnd);
+			}
 			break;
 		}
 #if _ENABLE_INITIALIZE_ASYNC_OPEN
@@ -393,6 +415,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 {
 	UNREFERENCED_PARAMETER(hPrevInstance);
 	UNREFERENCED_PARAMETER(lpCmdLine);
+
+	_wsetlocale(LC_ALL,L"");
 
 	RegisterMDIFrameClass(hInstance);
 	RegisterMDIChildFrameClass(hInstance);

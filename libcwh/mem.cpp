@@ -21,6 +21,10 @@
 #include "mem.h"
 #include "debug.h"
 
+#ifdef __cplusplus
+extern "C" {
+#endif
+
 #undef new
 
 #ifdef   _DEBUG
@@ -198,5 +202,9 @@ PTSTR _MemAllocStringCat(PCTSTR psz1,PCTSTR psz2)
 	_tcscpy(p,psz1);
 	_tcscat(p,psz2);
 	return p;
+}
+#endif
+
+#ifdef __cplusplus
 }
 #endif

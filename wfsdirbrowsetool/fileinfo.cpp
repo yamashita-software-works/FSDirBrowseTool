@@ -87,7 +87,8 @@ _DeviceIoControl(
     ULONG InputBufferLength,
 	PVOID OutputBuffer,
     ULONG OutputBufferLength,
-	PULONG BytesReturned
+	PULONG BytesReturned,
+	NTSTATUS *pNtStatus
 	)
 {
 	NTSTATUS Status;
@@ -101,9 +102,46 @@ _DeviceIoControl(
 	if( BytesReturned )
 		*BytesReturned = (ULONG)IoStatus.Information;
 
-	RtlSetLastWin32Error( Status );
+	if( pNtStatus )
+		*pNtStatus = Status;
+
+	RtlSetLastWin32Error( RtlNtStatusToDosError(Status) );
 
 	return (Status == STATUS_SUCCESS);
+}
+
+//----------------------------------------------------------------------------
+//
+//  _DeviceIoControl()
+//
+//  PURPOSE:
+//
+//----------------------------------------------------------------------------
+PRIVATE
+NTSTATUS
+NTAPI
+_GetFileSize(
+	HANDLE hFile,
+	LARGE_INTEGER *pSize,
+	LARGE_INTEGER *pAllocationSize
+	)
+{
+	NTSTATUS Status;
+	IO_STATUS_BLOCK IoStatus;
+
+	FILE_STANDARD_INFORMATION fsi;
+	Status = NtQueryInformationFile(hFile,&IoStatus,&fsi,sizeof(fsi),FileStandardInformation);
+
+	if( Status == STATUS_SUCCESS )
+	{
+		if( pSize )
+			*pSize = fsi.EndOfFile;
+
+		if( pAllocationSize )
+			*pAllocationSize = fsi.AllocationSize;
+	}
+
+	return Status;
 }
 
 //////////////////////////////////////////////////////////////////////////////
@@ -463,7 +501,7 @@ GetReparsePointInformation(
 							FSCTL_GET_REPARSE_POINT,
 							NULL,0,
 							pBuffer,cbDataLength,
-							&cb);
+							&cb,NULL);
 			if( bSuccess )
 			{
 				if( cb != 0 && (cb < cbDataLength) )
@@ -702,7 +740,7 @@ GetObjectIdInformation(
 	ULONG cb;
 
 	bSuccess = _DeviceIoControl(hFile,FSCTL_GET_OBJECT_ID,
-						NULL,0,&fob,sizeof(fob),&cb);
+						NULL,0,&fob,sizeof(fob),&cb,NULL);
 
 	if( bSuccess )
 		*pfob = fob;
@@ -817,31 +855,38 @@ GetWofFileInformation(
 //  PURPOSE:
 //
 //----------------------------------------------------------------------------
-/*
+#pragma pack(8)
 typedef struct _FS_SPARSE_ALLOCATED_RANGE {
     LARGE_INTEGER FileOffset;
     LARGE_INTEGER Length;
 } FS_SPARSE_ALLOCATED_RANGE, *PFS_SPARSE_ALLOCATED_RANGE;
 
+typedef struct _FS_SPARSE_ALLOCATED_RANGE_BUFFER {
+    ULONG ItemCount;
+	ULONG BufferSize;
+    FS_SPARSE_ALLOCATED_RANGE AllocatedRange[1];
+} FS_SPARSE_ALLOCATED_RANGE_BUFFER, *PFS_SPARSE_ALLOCATED_RANGE_BUFFER;
+#pragma pack()
+
 PRIVATE
 NTSTATUS
 APIENTRY
-FsGetSparseAllocatedRange(
+GetSparseAllocatedRange(
 	HANDLE hRoot,
 	LPCWSTR FilePath,
-	FS_SPARSE_ALLOCATED_RANGE **pBuffer,
-	ULONG *pcbBufferSize
+	FS_SPARSE_ALLOCATED_RANGE_BUFFER **pBuffer
 	)
 {
 	HANDLE hFile;
+	NTSTATUS Status;
 
 	if( FilePath != NULL )
 	{
-		hFile = FsOpenFile(hRoot, FilePath, FILE_GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE,0,NULL);
+		Status = OpenFile_W(&hFile,hRoot, FilePath, FILE_GENERIC_READ, FILE_SHARE_READ|FILE_SHARE_WRITE,0);
 
-		if( hFile == INVALID_HANDLE_VALUE )
+		if( Status != STATUS_SUCCESS )
 		{
-			return GetLastError();
+			return Status;
 		}
 	}
 	else
@@ -850,51 +895,61 @@ FsGetSparseAllocatedRange(
 	}
 
 	FILE_ALLOCATED_RANGE_BUFFER ScanRange;
-	FILE_ALLOCATED_RANGE_BUFFER *AllocatedParts;
+	FS_SPARSE_ALLOCATED_RANGE_BUFFER *AllocatedBuffer;
 	DWORD cbBytesReturned = 0;
-	DWORD cb = sizeof(FILE_ALLOCATED_RANGE_BUFFER) * 1024;
-	LONG lResult = 0;
+	DWORD cb = (sizeof(FILE_ALLOCATED_RANGE_BUFFER) * 255) + sizeof(FS_SPARSE_ALLOCATED_RANGE_BUFFER);
+	DWORD dwError = 0;
 
 _retry_alloc:
-	AllocatedParts = (FILE_ALLOCATED_RANGE_BUFFER *)FsMemAlloc( cb );
-	if( AllocatedParts == NULL )
+	AllocatedBuffer = (FS_SPARSE_ALLOCATED_RANGE_BUFFER *)AllocMemory( cb );
+	if( AllocatedBuffer == NULL )
 	{
-		CloseHandle(hFile);
-		return ERROR_NOT_ENOUGH_MEMORY;
+		NtClose(hFile);
+		return STATUS_NO_MEMORY;
 	}
 
 	ScanRange.FileOffset.QuadPart = 0;
-	GetFileSizeEx(hFile,&ScanRange.Length);
+	_GetFileSize(hFile,&ScanRange.Length,NULL);
 
 	if( !_DeviceIoControl(hFile,
 			FSCTL_QUERY_ALLOCATED_RANGES,
 			&ScanRange,sizeof(ScanRange),
-			AllocatedParts,cb,
-			&cbBytesReturned) )
+			AllocatedBuffer->AllocatedRange,cb,
+			&cbBytesReturned,&Status) )
 	{
-		// Win32
-		// FSCTL_QUERY_ALLOCATED_RANGESでバッファサイズが不足した場合ERROR_MORE_DATA(0xEA)が返る。
-		lResult = GetLastError();
-		if(lResult == ERROR_MORE_DATA )
+		dwError = RtlGetLastWin32Error();
+		if(dwError == ERROR_MORE_DATA )
 		{
-			FsMemFree( AllocatedParts );
-			cb += 512;
+			FreeMemory( AllocatedBuffer );
+			cb += (sizeof(FILE_ALLOCATED_RANGE_BUFFER) + 256);
 			goto _retry_alloc;
 		}
 	}
 	else
 	{
-		*pBuffer = (FS_SPARSE_ALLOCATED_RANGE *)FsMemReAlloc(AllocatedParts,cbBytesReturned); // do shrink only.
-		*pcbBufferSize = cbBytesReturned;
-		lResult = ERROR_SUCCESS;
+		ULONG cCount = cbBytesReturned / sizeof(FS_SPARSE_ALLOCATED_RANGE);
+
+		cbBytesReturned = sizeof(FS_SPARSE_ALLOCATED_RANGE_BUFFER) + ((cCount - 1) * sizeof(FS_SPARSE_ALLOCATED_RANGE));
+
+		FS_SPARSE_ALLOCATED_RANGE_BUFFER *pRanges = (FS_SPARSE_ALLOCATED_RANGE_BUFFER *)ReallocMemory(AllocatedBuffer,cbBytesReturned); // for shrink
+		if( pRanges )
+		{
+			pRanges->ItemCount = cCount;
+			pRanges->BufferSize = cbBytesReturned;
+			*pBuffer = pRanges;
+		}
+		else
+		{
+			Status = STATUS_NO_MEMORY;
+		}
 	}
 
 	if( FilePath != NULL )
-		CloseHandle(hFile);
+		NtClose(hFile);
 
-	return lResult;
+	return Status;
 }
-*/
+
 /////////////////////////////////////////////////////////////////////////////
 
 //---------------------------------------------------------------------------
@@ -1026,7 +1081,7 @@ NTFile_GatherFileInformation(
 	// Object IDs Information
 	//
 	FILE_OBJECTID_BUFFER fob = {0};
-	if( NT_SUCCESS(GetObjectIdInformation(hFile,&fob)) )
+	if( GetObjectIdInformation(hFile,&fob) == STATUS_SUCCESS )
 	{
 		memcpy(pfi->ObjectId.ObjectId,fob.ObjectId,16);
 		memcpy(pfi->ObjectId.BirthVolumeId,fob.BirthVolumeId,16);
@@ -1062,9 +1117,11 @@ NTFile_GatherFileInformation(
 	//
 	// Sparse File Information
 	//
+	FS_SPARSE_ALLOCATED_RANGE_BUFFER *pBuffer = NULL;
+	ULONG cbBufferSize = 0;
 	if( pfi->FileAttributes & FILE_ATTRIBUTE_SPARSE_FILE )
 	{
-		; // todo:
+		GetSparseAllocatedRange(hFile,NULL,&pBuffer);
 	}
 	
 	//

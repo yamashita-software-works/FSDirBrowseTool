@@ -566,11 +566,11 @@ TraverseDirectory(
         Status = STATUS_NO_MEMORY;
     }
 
-    delete pTDP;
-    
 #if !_C_STYLE
     delete pTDP->pcGetFileInfo;
 #endif
+
+    delete pTDP;
 
     return Status;
 }

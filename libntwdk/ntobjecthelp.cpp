@@ -14,6 +14,161 @@ extern "C" {
 
 //---------------------------------------------------------------------------
 //
+//  EnumDosDeviceTargetNames()
+//
+//  PURPOSE:
+//
+//---------------------------------------------------------------------------
+EXTERN_C
+NTSTATUS
+NTAPI
+EnumDosDeviceTargetNames(
+	HANDLE *phspa,
+    PCWSTR NtDevicePath,
+	ULONG Flags
+    )
+{
+    HANDLE hObjDir;
+    LONG Status;
+    ULONG Index = 0;
+    UNICODE_STRING usNtDeviceName;
+	WCHAR NtDeviceName[WIN32_MAX_PATH];
+	WCHAR DosDeviceName[WIN32_MAX_PATH];
+	UNICODE_STRING usNtDevicePath;
+
+	if( phspa == NULL || NtDevicePath == NULL )
+		return STATUS_INVALID_PARAMETER;
+
+	HANDLE hspa = SPtrArray_Create(0);
+	if( hspa == NULL )
+		return STATUS_NO_MEMORY;
+
+	RtlInitUnicodeString(&usNtDevicePath,NtDevicePath);
+
+    Status = OpenObjectDirectory( 
+					(Flags & EDDTNF_LOCAL) ? L"\\??" : L"\\GLOBAL??",
+					&hObjDir
+					);
+
+    if( Status == STATUS_SUCCESS )
+    {
+        while( QueryObjectDirectory(hObjDir,&Index,DosDeviceName,WIN32_MAX_PATH,NULL,0) == 0)
+        {
+			usNtDeviceName.Length = 0;
+			usNtDeviceName.MaximumLength = sizeof(NtDeviceName);
+			usNtDeviceName.Buffer = NtDeviceName;
+
+			if( QuerySymbolicLinkObject_U(hObjDir,DosDeviceName,&usNtDeviceName,FALSE) == 0 )
+			{
+				// As Prefix:
+				// "\Device\HareddiskVolume1"
+				//
+				// Target String:
+				// "\Device\HareddiskVolume1"       Yes
+				// "\Device\HareddiskVolume1\"      Yes
+				// "\Device\HareddiskVolume1\foo"   Yes
+				// "\Device\HareddiskVolume10"      No
+				// "\Device\HareddiskVolume10\"     No
+				// "\Device\HareddiskVolume10\foo"  No
+				//
+				if( usNtDeviceName.Length > 0 &&  RtlPrefixUnicodeString(&usNtDeviceName,&usNtDevicePath,TRUE) )
+				{
+					if( usNtDeviceName.Length <= usNtDevicePath.Length )
+					{
+						WCHAR ch;
+						if( usNtDeviceName.Length < usNtDevicePath.Length )
+							ch = usNtDevicePath.Buffer[ WCHAR_LENGTH(usNtDeviceName.Length) ];
+						else
+							ch = UNICODE_NULL;
+				
+						if( ch == UNICODE_NULL || ch == L'\\' || ch == L'/' )
+						{
+							SPtrArray_Add(hspa,DuplicateString(DosDeviceName));
+						}
+                    }
+                }
+            }
+        }
+
+        CloseObjectDirectory( hObjDir );
+
+		if( SPtrArray_GetCount(hspa) == 0 )
+		{
+			SPtrArray_Destroy(hspa);
+			*phspa = NULL;
+			Status = STATUS_OBJECT_NAME_NOT_FOUND;
+		}
+		else
+		{
+			*phspa = hspa;
+			Status = STATUS_SUCCESS;
+		}
+    }
+
+    return Status;
+}
+
+//---------------------------------------------------------------------------
+//
+//  GetDosDeviceTargetNamesCount()
+//
+//  PURPOSE:
+//
+//---------------------------------------------------------------------------
+EXTERN_C
+INT
+NTAPI
+GetDosDeviceTargetNamesCount(
+	HANDLE hspa
+	)
+{
+	return SPtrArray_GetCount(hspa);
+}
+
+//---------------------------------------------------------------------------
+//
+//  GetDosDeviceTargetNamesItem()
+//
+//  PURPOSE:
+//
+//---------------------------------------------------------------------------
+EXTERN_C
+PCWSTR
+NTAPI
+GetDosDeviceTargetNamesItem(
+	HANDLE hspa,
+	int iIndex,	
+	PDOSDEVICEITEMHINT ItemHint // Reserved
+	)
+{
+	return (PWSTR)SPtrArray_Get(hspa,iIndex);
+}	
+
+//---------------------------------------------------------------------------
+//
+//  FreeDosDeviceTargetNames()
+//
+//  PURPOSE:
+//
+//---------------------------------------------------------------------------
+EXTERN_C
+NTSTATUS
+NTAPI
+FreeDosDeviceTargetNames(
+	HANDLE hspa
+    )
+{
+	int i,c = SPtrArray_GetCount(hspa);
+	for(i = 0; i < c; i++)
+	{
+		FreeMemory(SPtrArray_Get(hspa,i));
+	}
+	SPtrArray_Destroy(hspa);
+	return STATUS_SUCCESS;
+}
+
+//---------------------------------------------------------------------------
+//
 //  LookupVolumeGuidName()
 //
 //  PURPOSE:
@@ -31,8 +186,8 @@ LookupVolumeGuidName(
     HANDLE hObjDir;
     LONG Status;
     ULONG Index = 0;
-    WCHAR VolumeSymName[260];
-    WCHAR DeviceName[260];
+    WCHAR VolumeName[WIN32_MAX_PATH];
+    WCHAR DeviceName[WIN32_MAX_PATH];
     UNICODE_STRING usDeviceName;
     UNICODE_STRING usDevicePath;
 
@@ -44,9 +199,9 @@ LookupVolumeGuidName(
 
     if( Status == STATUS_SUCCESS )
     {
-        Status = RtlNtStatusToDosError( STATUS_OBJECT_NAME_NOT_FOUND );
+        Status = STATUS_OBJECT_NAME_NOT_FOUND;
 
-        while( QueryObjectDirectory(hObjDir,&Index,VolumeSymName,260,NULL,0) == 0)
+        while( QueryObjectDirectory(hObjDir,&Index,VolumeName,WIN32_MAX_PATH,NULL,0) == 0)
         {
             // Looking for a string which have prefix of "Volume{".
             // If find matched prefix, check a trail of the matched string to 
@@ -55,21 +210,21 @@ LookupVolumeGuidName(
             //  0     0                                    4
             //  0     6                                    3 
             // "Volume{xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx}"
-            if( _wcsnicmp(VolumeSymName,L"Volume{",7) == 0 && 
-                (VolumeSymName[43] == L'}' && VolumeSymName[44] == '\0') )
+            if( _wcsnicmp(VolumeName,L"Volume{",7) == 0 && 
+                (VolumeName[43] == L'}' && VolumeName[44] == '\0') )
             {
                 usDeviceName.Length = 0;
                 usDeviceName.MaximumLength = sizeof(DeviceName);
                 usDeviceName.Buffer = DeviceName;
 
-                if( QuerySymbolicLinkObject_U(hObjDir,VolumeSymName,&usDeviceName,FALSE) == 0 )
+                if( QuerySymbolicLinkObject_U(hObjDir,VolumeName,&usDeviceName,FALSE) == 0 )
                 {
                     if( RtlCompareUnicodeString(&usDevicePath,&usDeviceName,TRUE) == 0 )
                     {
                         // Symbolic link name
                         if( VolumeSymbolicLink != NULL )
                         {
-                            wcsncpy_s(VolumeSymbolicLink,cchVolumeSymbolicLink,VolumeSymName,cchVolumeSymbolicLink-1);
+                            wcsncpy_s(VolumeSymbolicLink,cchVolumeSymbolicLink,VolumeName,cchVolumeSymbolicLink-1);
                         }
 
                         Status = STATUS_SUCCESS;
@@ -495,6 +650,9 @@ QuerySymbolicLinkObjectName(
     }
 
     RtlAppendUnicodeToString(&usSymLinkPath,SymbolicLinkPath);
+
+	if( !IsLastCharacterBackslash_U(&usSymLinkPath) )
+	    RtlAppendUnicodeToString(&usSymLinkPath,L"\\");
 
     RtlAppendUnicodeToString(&usSymLinkPath,SymbolicLinkName);
 

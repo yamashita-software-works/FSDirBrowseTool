@@ -85,3 +85,46 @@ LookupVolumeGuidName(
     PWSTR VolumeSymbolicLink,
     ULONG cchVolumeSymbolicLink
     );
+
+EXTERN_C
+NTSTATUS
+NTAPI
+EnumDosDeviceTargetNames(
+	HANDLE *phspa,
+    PCWSTR NtDevicePath,
+	ULONG Flags
+    );
+
+#define GLOBAL_DOS_DEVICE  0x0
+#define LOCAL_DOS_DEVICE   0x1
+
+#define EDDTNF_GLOBAL (GLOBAL_DOS_DEVICE)
+#define EDDTNF_LOCAL  (LOCAL_DOS_DEVICE)
+
+EXTERN_C
+INT
+NTAPI
+GetDosDeviceTargetNamesCount(
+	HANDLE hspa
+	);	
+
+typedef struct _DOSDEVICEITEMHINT
+{
+	ULONG  Reserved;
+} DOSDEVICEITEMHINT,*PDOSDEVICEITEMHINT;
+
+EXTERN_C
+PCWSTR
+NTAPI
+GetDosDeviceTargetNamesItem(
+	HANDLE hspa,
+	int iIndex,	
+	PDOSDEVICEITEMHINT ItemHint
+	);	
+
+EXTERN_C
+NTSTATUS
+NTAPI
+FreeDosDeviceTargetNames(
+	HANDLE hspa
+    );

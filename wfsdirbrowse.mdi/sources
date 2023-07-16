@@ -80,6 +80,7 @@ INCLUDES=$(INCLUDES);C:\WinDDK\7600.16385.1\inc\api
 INCLUDES=$(INCLUDES);C:\WinSDK\7.1\Include
 INCLUDES=$(INCLUDES);..\libcwh
 INCLUDES=$(INCLUDES);..\libmisc
+INCLUDES=$(INCLUDES);..\libntwdk
 
 #----------------------------------------------------------
 # Sources Files

@@ -12,6 +12,7 @@
 #include <malloc.h>
 #include <memory.h>
 #include <tchar.h>
+#include <locale.h>
 
 #define WIN32_LEAN_AND_MEAN // Exclude rarely-used stuff from Windows headers
 // Windows Header Files:
@@ -23,7 +24,7 @@
 #include <strsafe.h>
 #include <winternl.h> // WinSDK 7.1
 #include <shlobj.h>
-
+#include <winioctl.h>
 
 #if _MSC_VER <= 1500
 #define nullptr NULL
@@ -34,11 +35,12 @@
 #include "debug.h"
 #include "mem.h"
 
-#include <winioctl.h>
 #include "..\wfslib\wfslib.h"
 #include "..\wfsdirbrowsetool\wfsdirbrowsetool.h"
 #include "..\libntwdk\libntwdk.h"
 #include "..\libmisc\libmisc.h"
+#include "..\inc\common.h"
+#include "..\inc\common_resid.h"
 
 #define SetRedraw(h,f)	SendMessage(h,WM_SETREDRAW,(WPARAM)f,0)
 

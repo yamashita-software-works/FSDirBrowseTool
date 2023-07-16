@@ -1,9 +1,11 @@
-#pragma once
 //
 // ntnativeapi.h
 //
 // NT native API definitions.
 //
+#ifndef _NTNATIVEAPI_
+#define _NTNATIVEAPI_
+
 EXTERN_C
 VOID
 NTAPI
@@ -63,16 +65,6 @@ NTAPI
 RtlGetCurrentDirectory_U(
     IN ULONG nBufferLength,
     OUT PWSTR lpBuffer
-    );
-
-EXTERN_C
-BOOLEAN
-NTAPI
-RtlDosPathNameToNtPathName_U(
-    IN PCWSTR DosPathName,
-    OUT PUNICODE_STRING NtPathName,
-    OUT PCWSTR *NtFileNamePart,
-    OUT CURDIR *DirectoryInfo
     );
 
 EXTERN_C
@@ -163,6 +155,16 @@ RtlQueryEnvironmentVariable_U(
      __in PUNICODE_STRING Name,
      __out PUNICODE_STRING Value
      );
+
+EXTERN_C
+BOOLEAN
+NTAPI
+RtlDosPathNameToNtPathName_U(
+    IN PCWSTR DosPathName,
+    OUT PUNICODE_STRING NtPathName,
+    OUT PWSTR *NtFileNamePart,
+    OUT PRTL_RELATIVE_NAME_U DirectoryInfo
+    );
 
 struct _RTL_BUFFER;
 
@@ -591,54 +593,53 @@ typedef struct _FILE_NOTIFY_EXTENDED_INFORMATION {
     WCHAR FileName[1];
 } FILE_NOTIFY_EXTENDED_INFORMATION, *PFILE_NOTIFY_EXTENDED_INFORMATION;
 
-//  We cant define FILE_ID_128 as a union of the UCHAR[16] with two LONGLONGs because that would
-//  impose an alignment requirement that wouldn't otherwise exist.  That would change the in-memory
-//  layout of structures that already embed FILE_ID_128 and/or make their accesses unaligned.
-typedef struct _FILE_ID_128 {                               // winnt
-    UCHAR Identifier[16];                                   // winnt
-} FILE_ID_128, *PFILE_ID_128;                               // winnt
+#if (NTDDI_VERSION <= NTDDI_WIN7)
 
-#define FILE_ID_IS_INVALID(FID) ((FID).QuadPart == FILE_INVALID_FILE_ID)
+typedef enum _FILE_INFORMATION_CLASS_EX {
 
-#define FILE_ID_128_IS_INVALID(FID128) (((FID128).Identifier[0] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[1] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[2] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[3] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[4] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[5] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[6] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[7] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[8] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[9] == (UCHAR)-1) &&    \
-                                        ((FID128).Identifier[10] == (UCHAR)-1) &&   \
-                                        ((FID128).Identifier[11] == (UCHAR)-1) &&   \
-                                        ((FID128).Identifier[12] == (UCHAR)-1) &&   \
-                                        ((FID128).Identifier[13] == (UCHAR)-1) &&   \
-                                        ((FID128).Identifier[14] == (UCHAR)-1) &&   \
-                                        ((FID128).Identifier[15] == (UCHAR)-1))
+        //
+        //  These are special versions of these operations (defined earlier)
+        //  which can be used by kernel mode drivers only to bypass security
+        //  access checks for Rename and HardLink operations.  These operations
+        //  are only recognized by the IOManager, a file system should never
+        //  receive these.
+        //
 
-#define MAKE_INVALID_FILE_ID_128(FID128) {  \
-    ((FID128).Identifier[0] = (UCHAR)-1);   \
-    ((FID128).Identifier[1] = (UCHAR)-1);   \
-    ((FID128).Identifier[2] = (UCHAR)-1);   \
-    ((FID128).Identifier[3] = (UCHAR)-1);   \
-    ((FID128).Identifier[4] = (UCHAR)-1);   \
-    ((FID128).Identifier[5] = (UCHAR)-1);   \
-    ((FID128).Identifier[6] = (UCHAR)-1);   \
-    ((FID128).Identifier[7] = (UCHAR)-1);   \
-    ((FID128).Identifier[8] = (UCHAR)-1);   \
-    ((FID128).Identifier[9] = (UCHAR)-1);   \
-    ((FID128).Identifier[10] = (UCHAR)-1);  \
-    ((FID128).Identifier[11] = (UCHAR)-1);  \
-    ((FID128).Identifier[12] = (UCHAR)-1);  \
-    ((FID128).Identifier[13] = (UCHAR)-1);  \
-    ((FID128).Identifier[14] = (UCHAR)-1);  \
-    ((FID128).Identifier[15] = (UCHAR)-1);  \
-}
+    FileRenameInformationBypassAccessCheck = 56,  // 56
+    FileLinkInformationBypassAccessCheck,    // 57
+
+        //
+        // End of special information classes reserved for IOManager.
+        //
+
+    FileVolumeNameInformation,               // 58
+    FileIdInformation,                       // 59
+    FileIdExtdDirectoryInformation,          // 60
+    FileReplaceCompletionInformation,        // 61
+    FileHardLinkFullIdInformation,           // 62
+    FileIdExtdBothDirectoryInformation,      // 63
+    FileDispositionInformationEx,            // 64
+    FileRenameInformationEx,                 // 65
+    FileRenameInformationExBypassAccessCheck, // 66
+    FileDesiredStorageClassInformation,      // 67
+    FileStatInformation,                     // 68 Windows 10, version 1709.
+    FileMemoryPartitionInformation,          // 69
+    FileStatLxInformation,                   // 70
+    FileCaseSensitiveInformation,            // 71
+    FileLinkInformationEx,                   // 72 Windows 10, version 1809.
+    FileLinkInformationExBypassAccessCheck,  // 73 Windows 10, version 1809.
+    FileStorageReserveIdInformation,         // 74
+    FileCaseSensitiveInformationForceAccessCheck, // 75
+    FileKnownFolderInformation,              // 76
+} FILE_INFORMATION_CLASS_EX, *PFILE_INFORMATION_CLASS_EX;
+
+#endif
 
 //
 // Windows 8.1
 //
+
+#include "ntfileid.h"
 
 typedef struct _FILE_ID_EXTD_DIR_INFORMATION {
     ULONG NextEntryOffset;
@@ -802,8 +803,6 @@ typedef struct _REPARSE_APPEXECLINK_READ_BUFFER { // For tag IO_REPARSE_TAG_APPE
   */     
 } APPEXECLINK_READ_BUFFER, *PAPPEXECLINK_READ_BUFFER;
 
-//#define _REPARSE_DATA_BUFFER_LENGTH  (sizeof(REPARSE_DATA_BUFFER) + _NT_PATH_FULL_LENGTH_BYTES)
-
 #include "ntreparsepointtag.h"
 
 //////////////////////////////////////////////////////////////////////////////
@@ -820,3 +819,4 @@ typedef struct _REPARSE_APPEXECLINK_READ_BUFFER { // For tag IO_REPARSE_TAG_APPE
 #define TRUNCATE_EXISTING   5
 #endif
 
+#endif

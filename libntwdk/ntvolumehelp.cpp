@@ -6,18 +6,17 @@
 EXTERN_C
 NTSTATUS
 NTAPI
-OpenVolume(
-    PCWSTR VolumeName,
+OpenVolume_U(
+    UNICODE_STRING *pusVolumeName,
     ULONG Flags,
     HANDLE *pHandle
     )
 {
     NTSTATUS Status;
-    UNICODE_STRING usVolumeDevice;
+	UNICODE_STRING usVolumeDeviceName;
 
-    RtlInitUnicodeString(&usVolumeDevice,VolumeName);
-
-    RemoveBackslash_U(&usVolumeDevice);
+	usVolumeDeviceName = *pusVolumeName;
+    RemoveBackslash_U(&usVolumeDeviceName);
 
     ULONG DesiredAccess = STANDARD_RIGHTS_READ|FILE_READ_ATTRIBUTES|SYNCHRONIZE;
     if( Flags & OPEN_READ_DATA )
@@ -25,7 +24,7 @@ OpenVolume(
         DesiredAccess |= FILE_READ_DATA;
     }
 
-    Status = OpenFile_U(pHandle,NULL,&usVolumeDevice,
+    Status = OpenFile_U(pHandle,NULL,&usVolumeDeviceName,
                         DesiredAccess,
                         FILE_SHARE_READ|FILE_SHARE_WRITE,
                         FILE_OPEN_FOR_BACKUP_INTENT|FILE_SYNCHRONOUS_IO_NONALERT);
@@ -33,6 +32,20 @@ OpenVolume(
     RtlSetLastWin32Error( RtlNtStatusToDosError(Status) );
 
     return Status;
+}
+
+EXTERN_C
+NTSTATUS
+NTAPI
+OpenVolume(
+    PCWSTR VolumeName,
+    ULONG Flags,
+    HANDLE *pHandle
+    )
+{
+	UNICODE_STRING usVolumeName;
+	RtlInitUnicodeString(&usVolumeName,VolumeName);
+	return OpenVolume_U(&usVolumeName,Flags,pHandle);
 }
 
 EXTERN_C

@@ -48,6 +48,7 @@ HINSTANCE _GetResourceInstance();
 #include "..\wfslib\wfslib.h"
 #include "..\libntwdk\libntwdk.h"
 #include "..\inc\common.h"
+#include "..\inc\common_resid.h"
 
 #define  _ASSERT ASSERT
 
@@ -55,6 +56,30 @@ HINSTANCE _GetResourceInstance();
 // Data definitions
 //
 #include "fileinfo.h"
+
+typedef struct _FILEITEMHEADER
+{
+	ULONG Reserved;
+	PWSTR Path;
+	PWSTR FileName;
+} FILEITEMHEADER;
+
+typedef struct _FILEITEM
+{
+	FILEITEMHEADER hdr;
+    LARGE_INTEGER CreationTime;
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER LastWriteTime;
+    LARGE_INTEGER ChangeTime;
+    LARGE_INTEGER EndOfFile;
+    LARGE_INTEGER AllocationSize;
+    ULONG FileAttributes;
+    ULONG FileNameLength;
+    ULONG EaSize;
+    ULONG FileIndex;
+    LARGE_INTEGER FileId;
+    WCHAR ShortName[14];
+} FILEITEM,*PFILEITEM;
 
 class CFileItem : public FILEITEM
 {
@@ -124,8 +149,9 @@ enum {
 // Folder tree item ident
 //
 typedef enum {
-	ITEM_FOLDER_NAME,
-	ITEM_FOLDER_PATH, /* reserved */
+	ITEM_FOLDER_UNKNOWN,
+	ITEM_FOLDER_DIRECTORY,
+	ITEM_FOLDER_FILENAME,
 	ITEM_FOLDER_ROOT,
 	ITEM_BLANK,
 	ITEM_GROUP,
@@ -134,7 +160,7 @@ typedef enum {
 //
 // WM_CONTROL_MESSAGE
 //
-#define WM_CONTROL_MESSAGE  (WM_APP+1000)
+#define WM_CONTROL_MESSAGE  (WM_APP+2000)
 
 // WPARAM LOWORD(f)
 #define CODE_SELECT_PATH        (0x0001)
@@ -157,5 +183,5 @@ typedef struct _SELECT_TITLE
 	FILE_INFORMATION_STRUCT *pFileInfo;
 } SELECT_TITLE;
 
-HIMAGELIST DIRBGetShareImageList();
-INT DIRBGetUpDirImageIndex();
+HIMAGELIST GetGlobalShareImageList();
+INT GetUpDirImageIndex();

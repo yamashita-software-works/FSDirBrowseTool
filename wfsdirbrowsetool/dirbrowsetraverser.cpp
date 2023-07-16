@@ -27,8 +27,13 @@ public:
 	HWND m_hWndTree;
 	HWND m_hWndNotice;
 
+	DWORD m_dwStyle;
+
 	VOID SetNotifyWnd(HWND hwnd) { m_hWndNotice = hwnd; }
 	HWND GetNotifyWnd() { return m_hWndNotice; }
+
+	VOID SetExtendedStyle(DWORD dwStyle) { m_dwStyle = dwStyle; }
+	DWORD GetExtendedStyle() { return m_dwStyle; }
 
 	PWSTR m_pszDirectoryPath;
 
@@ -43,6 +48,7 @@ public:
 		m_pszDirectoryPath = NULL;
 		m_bPreventAction = FALSE;
 		m_bGetUniqueIcon = FALSE;
+		m_dwStyle = 0;
 	}
 
 	~CDirectoryTraverser()
@@ -127,7 +133,7 @@ public:
 		{
 			if( wcscmp(pszFileName,L"..") == 0 )
 			{
-				iImage = DIRBGetUpDirImageIndex();
+				iImage = GetUpDirImageIndex();
 			}
 			else if( m_bGetUniqueIcon )
 			{
@@ -326,21 +332,29 @@ public:
 				continue;
 
 			if( pItem->FileAttributes & FILE_ATTRIBUTE_DIRECTORY )
-				AddItem(ITEM_FOLDER_PATH,pItem->hdr.FileName,pItem->hdr.FileName,NULL,pItem->FileAttributes,TVI_ROOT,TVI_LAST,0);
+			{
+				if( m_dwStyle & DTS_DIRECTORYNAMES )
+				{
+					AddItem(ITEM_FOLDER_DIRECTORY,pItem->hdr.FileName,pItem->hdr.FileName,NULL,pItem->FileAttributes,TVI_ROOT,TVI_LAST,0);
+				}
+			}
 			else
 				cFiles++;
 		}
 
-		if( cFiles > 0 )
+		if( m_dwStyle & DTS_FILENAMES )
 		{
-			InsertBlank(TVI_ROOT,TVI_LAST);
-
-			for(i = 0; i < cItems; i++)
+			if( cFiles > 0 )
 			{
-				CFileItem *pItem = pa.Get(i);
+				InsertBlank(TVI_ROOT,TVI_LAST);
 
-				if( (pItem->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 )
-					AddItem(ITEM_FOLDER_PATH,pItem->hdr.FileName,pItem->hdr.FileName,NULL,pItem->FileAttributes,TVI_ROOT,TVI_LAST,0);
+				for(i = 0; i < cItems; i++)
+				{
+					CFileItem *pItem = pa.Get(i);
+
+					if( (pItem->FileAttributes & FILE_ATTRIBUTE_DIRECTORY) == 0 )
+						AddItem(ITEM_FOLDER_FILENAME,pItem->hdr.FileName,pItem->hdr.FileName,NULL,pItem->FileAttributes,TVI_ROOT,TVI_LAST,0);
+				}
 			}
 		}
 	}
@@ -401,7 +415,7 @@ public:
 		hwndTreeView = CreateWindowEx(0,
 							WC_TREEVIEW,
 							TEXT("DirectoryTraverser"),
-							WS_VISIBLE|WS_CHILD|WS_TABSTOP|TVS_DISABLEDRAGDROP|//TVS_NOHSCROLL|
+							WS_VISIBLE|WS_CHILD|WS_TABSTOP|TVS_DISABLEDRAGDROP|TVS_NOHSCROLL|
 							TVS_HASBUTTONS|TVS_LINESATROOT|TVS_INFOTIP|TVS_FULLROWSELECT|TVS_NONEVENHEIGHT|TVS_SHOWSELALWAYS, 
 							0, 0, 0, 0,
 							hwndParent, 
@@ -416,7 +430,7 @@ public:
 
 		_EnableVisualThemeStyle(hwndTreeView);
 
-		HIMAGELIST himl = DIRBGetShareImageList();
+		HIMAGELIST himl = GetGlobalShareImageList();
 		TreeView_SetImageList(hwndTreeView,himl,TVSIL_NORMAL);
 
 		int cx,cy;
@@ -424,6 +438,8 @@ public:
 
 		TreeView_SetIndent(hwndTreeView,cx/2);
 		TreeView_SetItemHeight(hwndTreeView,cy+8);
+
+		TreeView_SetBkColor(hwndTreeView,RGB(243,243,243)); // dark mode not considering
 
 		return hwndTreeView;
 	}
@@ -436,9 +452,6 @@ public:
 	LRESULT OnCreate(HWND hWnd,UINT,WPARAM,LPARAM)
 	{
 		m_hWndTree = CreateFolderTreeView(hWnd);
-
-		SendMessage(m_hWndTree,TVM_SETBKCOLOR,0,(LPARAM)RGB(250,250,250));
-
 		return 0;
 	}
 
@@ -521,6 +534,11 @@ public:
 							FreeMemory(pszFullPath);
 						}
 					}
+				}
+
+				if( pItem->ItemType == ITEM_FOLDER_ROOT )
+				{
+					TreeView_EnsureVisible(pnmtv->hdr.hwndFrom,TreeView_GetRoot(pnmtv->hdr.hwndFrom));
 				}
 			}
 		}
@@ -670,6 +688,7 @@ public:
 
 				if( hNextItem )
 				{
+#if 0
 					TREEITEM *pItem = (TREEITEM *)TreeView_GetItemData(m_hWndTree,hNextItem);
 					if( pItem->ItemType == ITEM_FOLDER_ROOT )
 					{
@@ -679,9 +698,12 @@ public:
 					{
 						if( TreeView_GetLastVisible(m_hWndTree) == hNextItem )
 						{
-							TreeView_EnsureVisible(m_hWndTree, hNextItem );
+							TreeView_EnsureVisible(m_hWndTree, hNextItem);
 						}
 					}
+#else
+					TreeView_EnsureVisible(m_hWndTree, hNextItem);
+#endif
 				}
 				SetRedraw(m_hWndTree,TRUE);
 			}
@@ -747,7 +769,7 @@ public:
 //
 //  PURPOSE : 
 //
-HRESULT DirectoryTraverser_CreateWindow(HWND hWnd,HWND *phWnd)
+HRESULT DirectoryTraverser_CreateWindow(HWND hWnd,HWND *phWnd,DWORD dwExStyle)
 {
     HINSTANCE hInstance;
     hInstance = GETINSTANCE(hWnd);
@@ -755,6 +777,8 @@ HRESULT DirectoryTraverser_CreateWindow(HWND hWnd,HWND *phWnd)
 	CDirectoryTraverser *pWnd = new CDirectoryTraverser;
 
 	CDirectoryTraverser::RegisterClass(hInstance);
+
+	pWnd->SetExtendedStyle( dwExStyle );
 
 	HWND hwnd = pWnd->Create(hWnd,0,NULL,WS_CHILD|WS_VISIBLE|WS_CLIPCHILDREN,WS_EX_CONTROLPARENT);
 

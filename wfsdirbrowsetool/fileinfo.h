@@ -133,4 +133,3 @@ NTFile_GetAttributeString(
 	LPWSTR String,
 	int cchString
 	);
-

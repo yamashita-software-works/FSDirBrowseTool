@@ -18,57 +18,69 @@
 #define _USE_INTERNAL_MEMORY_DEBUG  0
 #endif
 
+#if _USE_INTERNAL_MEMORY_DEBUG
+#include "..\libcwh\mem.h"
+#endif
+
 #ifdef __cplusplus
 extern "C" {
 #endif
-#if _USE_INTERNAL_MEMORY_DEBUG
-PVOID NTAPI _DebugAllocMemory(SIZE_T cb);
-PVOID NTAPI _DebugReallocMemory(PVOID pv,SIZE_T cb);
-VOID  NTAPI _DebugFreeMemory(PVOID ptr);
-#endif
+#if !(_USE_INTERNAL_MEMORY_DEBUG)
 PVOID NTAPI AllocMemory(SIZE_T cb);
 PVOID NTAPI ReAllocateHeap(PVOID pv,SIZE_T cb);
 #define ReallocMemory(pv,cb) ReAllocateHeap(pv,cb)
 VOID NTAPI FreeMemory(PVOID ptr);
-NTSTATUS NTAPI AllocateUnicodeString(UNICODE_STRING *pus,PCWSTR psz);
-NTSTATUS NTAPI DuplicateUnicodeString(UNICODE_STRING *pusDup,UNICODE_STRING *pusSrc);
-NTSTATUS NTAPI AllocateUnicodeStringCbBuffer(UNICODE_STRING *pus,ULONG cb);
-NTSTATUS NTAPI AllocateUnicodeStringCchBuffer(UNICODE_STRING *pus,ULONG cch);
-PWSTR NTAPI AllocateSzFromUnicodeString(UNICODE_STRING *pus);
 WCHAR* NTAPI AllocStringBuffer(SIZE_T cch);
 WCHAR* NTAPI AllocStringBufferCb(SIZE_T cb);
-PWSTR NTAPI AllocStringLengthCb(PCWSTR psz,SIZE_T cb);
 PWSTR NTAPI DuplicateString(PCWSTR psz);
-BOOLEAN IsNtDevicePath(PCWSTR pszPath);
-BOOLEAN HasPrefix(PCWSTR pszPrefix,PCWSTR pszPath);
-BOOLEAN HasPrefix_U(PCWSTR pszPrefix,UNICODE_STRING *String);
-BOOLEAN HasWildCardChar_U(UNICODE_STRING *String);
+#endif
+PWSTR NTAPI AllocateSzFromUnicodeString(__in UNICODE_STRING *pus);
+PWSTR NTAPI AllocStringLengthCb(PCWSTR psz,SIZE_T cb);
+
+NTSTATUS NTAPI AllocateUnicodeString(__out UNICODE_STRING *pus,__in PCWSTR psz);
+NTSTATUS NTAPI DuplicateUnicodeString(__out UNICODE_STRING *pusDup,__in UNICODE_STRING *pusSrc);
+//NTSTATUS NTAPI AllocateUnicodeStringCbBuffer(UNICODE_STRING *pus,ULONG cb);
+//NTSTATUS NTAPI AllocateUnicodeStringCchBuffer(UNICODE_STRING *pus,ULONG cch);
+NTSTATUS CombineUnicodeStringPath(UNICODE_STRING *CombinedPath,UNICODE_STRING *Path,UNICODE_STRING *FileName);
+NTSTATUS NTAPI FreeUnicodeString(UNICODE_STRING *pus);
+
+NTSTATUS FindRootDirectory_U(__in UNICODE_STRING *pusFullyQualifiedPath,__out PWSTR *pRootDirectory);
 NTSTATUS GetFileNamePart_U(__in UNICODE_STRING *FilePath,__out UNICODE_STRING *FileName);
 NTSTATUS SplitPathFileName_U(__inout UNICODE_STRING *Path,__out UNICODE_STRING *FileName);
 BOOLEAN SplitRootRelativePath(__in PCWSTR pszFullPath,__out UNICODE_STRING *RootDirectory,__out UNICODE_STRING *RootRelativePath);
 BOOLEAN SplitVolumeRelativePath(__in PCWSTR pszFullPath,__out UNICODE_STRING *VolumeName,__out UNICODE_STRING *VolumeRelativePath);
-BOOLEAN IsRelativePath(PCWSTR pszPath);
+BOOLEAN SplitVolumeRelativePath_U(__in UNICODE_STRING *FullPath,__out UNICODE_STRING *VolumeName,__out UNICODE_STRING *VolumeRelativePath);
+BOOLEAN GetRootDirectory_U(__inout UNICODE_STRING *pusFullyQualifiedPath);
+BOOLEAN GetVolumeName_U(__inout UNICODE_STRING *pusFullyQualifiedPath);
+
 BOOLEAN PathFileExists_U(UNICODE_STRING *pusPath,ULONG *FileAttributes);
 BOOLEAN PathFileExists_UEx(HANDLE hParentDir,UNICODE_STRING *pusPath,ULONG *FileAttributes);
 BOOLEAN PathFileExists_W(PCWSTR pszPath,ULONG *FileAttributes);
+
+BOOLEAN IsNtDevicePath(PCWSTR pszPath);
+BOOLEAN IsStringVolumeGuid(PCWSTR pszString);
+BOOLEAN IsRelativePath(PCWSTR pszPath);
 BOOLEAN IsDirectory(PCWSTR pszPath);
 BOOLEAN IsDirectory_U(UNICODE_STRING *pusPath);
 BOOLEAN IsRootDirectory_U(UNICODE_STRING *pusFullyPath);
 BOOLEAN IsLastCharacterBackslash(PCWSTR pszPath);
 BOOLEAN IsLastCharacterBackslash_U(UNICODE_STRING *pusPath);
-BOOLEAN GetRootDirectory_U(UNICODE_STRING *pusFullyQualifiedPath);
-BOOLEAN GetVolumeName_U(UNICODE_STRING *pusFullyQualifiedPath);
-NTSTATUS FindRootDirectory_U(UNICODE_STRING *pusFullyQualifiedPath,PWSTR *pRootDirectory);
+BOOLEAN HasPrefix(PCWSTR pszPrefix,PCWSTR pszPath);
+BOOLEAN HasPrefix_U(PCWSTR pszPrefix,UNICODE_STRING *String);
+BOOLEAN HasWildCardChar_U(UNICODE_STRING *String);
+
 VOID RemoveBackslash(PWSTR pszPath);
 VOID RemoveBackslash_U(UNICODE_STRING *pusPath);
 VOID RemoveFileSpec(PWSTR pszPath);
+
 PWSTR CombinePath(PCWSTR pszPath,PCWSTR pszFileName);
 PWSTR CombinePath_U(PCWSTR pszPath,UNICODE_STRING *pusFileName);
-NTSTATUS CombineUnicodeStringPath(UNICODE_STRING *CombinedPath,UNICODE_STRING *Path,UNICODE_STRING *FileName);
+PWSTR CombinePathBuffer(PWSTR lpszDest,int cchDest,PCWSTR lpszDir,PCWSTR lpszFile);
+
 PWSTR DosPathNameToNtPathName(PCWSTR pszDosPath);
 
 #ifdef _NTIFS_
-NTSTATUS GetFileDateTime_U( UNICODE_STRING *FilePath, FILE_BASIC_INFORMATION *pbi );
+NTSTATUS GetFileDateTime_U( HANDLE RootHandle, UNICODE_STRING *FilePath, FILE_BASIC_INFORMATION *pbi );
 #endif
 
 VOID NTAPI _SetLastStatusDos(NTSTATUS ntStatus);
@@ -85,9 +97,15 @@ BOOLEAN _UStrMatchI_U(const WCHAR *ptn,const UNICODE_STRING *pus);
 HRESULT GetNtPath(PCWSTR DosPathName,PWSTR *NtPath,PCWSTR *NtFileNamePart);
 HRESULT GetNtPath_U(PCWSTR DosPathName,UNICODE_STRING *NtPath,PCWSTR *NtFileNamePart);
 
-#ifdef __cplusplus
-}
-#endif
+HANDLE SPtrArray_Create(INT InitialSize);
+INT SPtrArray_Destroy(HANDLE hspa);
+INT SPtrArray_GetCount(HANDLE hspa);
+INT SPtrArray_Add(HANDLE hspa,PVOID Insert);
+PVOID SPtrArray_Get(HANDLE hspa,int iIndex);
+INT SPtrArray_Delete(HANDLE hspa,int iIndex);
+
+#define SPtrArray_GetPWSTR(h,i) ((PWSTR)SPtrArray_Get(h,i))
+#define SPtrArray_GetPtr(h,i) SPtrArray_Get(h,i)
 
 typedef
 NTSTATUS
@@ -166,6 +184,20 @@ OpenFile_W(
 #define OpenFile OpenFile_W
 #endif
 
+#include "ntfileid.h"
+
+EXTERN_C
+NTSTATUS
+NTAPI
+OpenFile_ID(
+	PHANDLE phFile,
+	HANDLE hVolume,
+	PFS_FILE_ID_DESCRIPTOR FileIdDesc,
+	ULONG DesiredAccess,
+	ULONG ShareAccess,
+	ULONG OpenOptions
+	);
+
 EXTERN_C
 NTSTATUS
 NTAPI
@@ -214,13 +246,6 @@ CreateDirectory_W(
 EXTERN_C
 NTSTATUS
 NTAPI
-MakeSureDirectoryPathExistsW(
-    PCWSTR pszFullPath
-    );
-
-EXTERN_C
-NTSTATUS
-NTAPI
 StringFromGUID(
     __in  const GUID *Guid,
     __out LPWSTR lpszGuid,
@@ -231,8 +256,10 @@ StringFromGUID(
 #define LPWSTR_GLOBALROOTPREFIX_W32  L"\\\\?\\GlobalRoot"
 #define LPWSTR_DOSNAMESPACEPREFIX    L"\\??\\"
 
+#define _DOS_DRIVE_CHAR(ch) ((L'A' <= ch && ch <= L'Z') || (L'a' <= ch && ch <= L'z'))
+
 // A string minimum length of 6 characters need.
-#define PathIsGlobalRootPrefixDosDrive(p) \
+#define PathIsPrefixDosDeviceDrive(p) \
 		(\
 		p != NULL && \
 		p[0] == L'\\' && \
@@ -243,7 +270,7 @@ StringFromGUID(
 		p[5] == L':')
 
 // A string minimum length of 4 characters need.
-#define PathIsGlobalRootPrefix(p) \
+#define PathIsPrefixDosDevice(p) \
 		(\
 		p != NULL && \
 		p[0] == L'\\' && \
@@ -251,5 +278,102 @@ StringFromGUID(
 		p[2] == L'?' && \
 		p[3] == L'\\' )
 
-#define PathIsGlobalRootPrefix_U(pus) \
-		((pus)->Length >= 8 && PathIsGlobalRootPrefix((pus)->Buffer))
+#define PathIsPrefixDosDevice_U(pus) \
+		((pus)->Length >= 8 && PathIsPrefixDosDevice((pus)->Buffer))
+
+
+#define PATHTYPE_WIN32_DEVICE    0x10
+#define PATHTYPE_WIN32            0x8
+#define PATHTYPE_DOS_DRIVE        0x4
+#define PATHTYPE_DOS_DEVICE       0x2
+#define PATHTYPE_NT_DEVICE        0x1
+
+ULONG
+GetPathType(
+	__in PCWSTR pszPath
+	);
+
+ULONG
+GetPathType_U(
+	__in UNICODE_STRING *pusPath
+	);
+
+typedef struct _FS_FILE_DIRECTORY_INFORMATION {
+	ULONG cbSize;
+	ULONG Reserved;
+    LARGE_INTEGER CreationTime;  // same layout from FILE_ID_BOTH_DIR_INFORMATION.CreationTime
+    LARGE_INTEGER LastAccessTime;
+    LARGE_INTEGER LastWriteTime;
+    LARGE_INTEGER ChangeTime;
+    LARGE_INTEGER EndOfFile;
+    LARGE_INTEGER AllocationSize;
+    ULONG FileAttributes;        // to this member.
+    ULONG EaSize;
+    CCHAR ShortNameLength;
+    WCHAR ShortName[12+1];
+	union {
+		LARGE_INTEGER FileId;
+	};
+} FS_FILE_DIRECTORY_INFORMATION;
+
+#define FS_DIRINFO_COMMON_COPY_SIZE (sizeof(ULONG) + sizeof(LARGE_INTEGER) * 6)
+
+EXTERN_C
+NTSTATUS
+NTAPI
+GetDirectoryFileInformation_U(
+	HANDLE hDirectory,
+	UNICODE_STRING *pusFileName,
+	FS_FILE_DIRECTORY_INFORMATION *pInfoBuffer
+	);
+
+EXTERN_C
+NTSTATUS
+NTAPI
+MakeSureDirectoryPathExists_W(
+	PCWSTR DirPath
+	);
+
+EXTERN_C
+NTSTATUS
+NTAPI
+RenameDirectoryEntry_U(
+	HANDLE hExistingDirectory,
+	UNICODE_STRING *pusExistingFilePath,
+	HANDLE hDestinationDirectory,
+	UNICODE_STRING *pusNewFileName,
+	BOOLEAN ReplaceIfExists
+	);
+
+EXTERN_C
+NTSTATUS
+NTAPI
+RenameDirectoryEntry(
+	HANDLE hExistingDirectory,
+	PCWSTR pszExistingFileName,
+	HANDLE hDestinationDirectory,
+	PCWSTR pszNewFileName,
+	BOOLEAN ReplaceIfExists
+	);
+
+EXTERN_C
+NTSTATUS
+NTAPI
+MoveDirectoryEntry(
+	PCWSTR pszSourceFilePath,
+	PCWSTR pszDestinationFilePath,
+	BOOLEAN ReplaceIfExists
+	);
+
+EXTERN_C
+NTSTATUS
+NTAPI
+GetShortPath_W(
+	__in PCWSTR pszFullPath,
+	__out PWSTR pszShortPathBuffer,
+	__in ULONG cchShortPathBuffer
+	);
+
+#ifdef __cplusplus
+}
+#endif

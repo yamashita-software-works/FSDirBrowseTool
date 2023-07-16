@@ -17,6 +17,7 @@ typedef struct _UNICODE_STRING {
 
 #include "ntpathcomponent.h"
 #include "ntnativehelp.h"
+#include "ntvolumehelp.h"
 
 //
 // WDK definitions for Win32 build compatible
@@ -138,11 +139,3 @@ WinEnumFiles(
     FSHELPENUMCALLBACKPROC Callback,
     PVOID Context
     );
-
-#ifdef __cplusplus
-extern "C" {
-#endif
-
-#ifdef __cplusplus
-};
-#endif
