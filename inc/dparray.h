@@ -17,11 +17,6 @@ public:
 	{
 		if(m_hdpa != NULL)
 		{
-#ifdef _DEBUG
-			WCHAR msg[128];
-			StringCchPrintf(msg,ARRAYSIZE(msg),L"Pointer array unfreed - %p\n",m_hdpa);
-			OutputDebugString(msg);
-#endif
 			Destroy();
 		}
 	}

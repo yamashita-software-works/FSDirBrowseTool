@@ -846,7 +846,7 @@ GetWofFileInformation(
 //
 //----------------------------------------------------------------------------
 
-#define FreeWofFileInformation(ei,pi) FreeMemory(ei); // pi is do not free
+#define FreeWofFileInformation(ei,pi) FreeMemory(ei) // pi is do not free
 
 //----------------------------------------------------------------------------
 //

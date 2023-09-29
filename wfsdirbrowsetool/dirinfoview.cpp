@@ -15,18 +15,11 @@
 //
 #include "stdafx.h"
 #include "resource.h"
-#include "dirbrowseview.h"
-
-enum {
-	INFOVIEW_ROOT = 0,
-	INFOVIEW_FILEINFO,
-	INFOVIEW_FILELIST,
-	MAX_INFO_VIEW_TYPE,
-};
+#include "dirinfoview.h"
 
 class CFileViewBase : 
 	public CBaseWindow,
-	public IFileViewBaseWindow
+	public IViewBaseWindow
 {
 	CPageWndBase *m_pBase;
 	CPageWndBase *m_pViewTable[MAX_INFO_VIEW_TYPE];
@@ -123,14 +116,14 @@ public:
 
 		switch( nView )
 		{
-			case INFOVIEW_ROOT:
+			case VIEW_ROOT:
 			{
-				pNew = GetOrAllocWndObjct<CRootView>(INFOVIEW_ROOT);
+				pNew = GetOrAllocWndObjct<CRootView>(VIEW_ROOT);
 				break;
 			}
-			case INFOVIEW_FILEINFO:
+			case VIEW_FILEINFO:
 			{
-				pNew = GetOrAllocWndObjct<CFileInfoView>(INFOVIEW_FILEINFO);
+				pNew = GetOrAllocWndObjct<CFileInfoView>(VIEW_FILEINFO);
 				break;
 			}
 			default:
@@ -159,11 +152,11 @@ public:
 		return nView;
 	}
 
-	VOID UpdateData(SELECT_FILE *pFile)
+	HRESULT UpdateData(SELECT_ITEM *pFile)
 	{
 		ASSERT( m_pBase != NULL );
 
-		m_pBase->UpdateData(pFile);
+		return m_pBase->UpdateData(pFile);
 	}
 
 	virtual LRESULT WndProc(HWND hWnd, UINT uMsg, WPARAM wParam, LPARAM lParam)
@@ -204,22 +197,21 @@ public:
 	}
 
 	HRESULT Destroy() { return E_NOTIMPL; }
-	HRESULT InitData() { return E_NOTIMPL; }
+	HRESULT InitData(SELECT_ITEM *) { return E_NOTIMPL; }
 	HRESULT InitLayout(const RECT *prc) { return E_NOTIMPL; }
 
-	HRESULT SelectData(SELECT_FILE *Path) 
+	HRESULT SelectPage(SELECT_ITEM *Path) 
 	{
-		SELECT_FILE *pSel = (SELECT_FILE *)Path;
+		SELECT_ITEM *pSel = (SELECT_ITEM *)Path;
 		ASSERT(pSel != NULL);
 
-		switch( pSel->Type )
+		switch( pSel->ViewType )
 		{
-			case ITEM_FOLDER_ROOT:
-				SelectView( INFOVIEW_ROOT );
+			case VIEW_ROOT:
+				SelectView( VIEW_ROOT );
 				break;
-			case ITEM_FOLDER_DIRECTORY:
-			case ITEM_FOLDER_FILENAME:
-				SelectView( INFOVIEW_FILEINFO );
+			case VIEW_FILEINFO:
+				SelectView( VIEW_FILEINFO );
 				break;
 		}
 
@@ -234,6 +226,11 @@ public:
 	{
 		return m_pBase->QueryCmdState(CmdId,State);
 	}
+
+	virtual HRESULT InvokeCommand(UINT CmdId)
+	{
+		return m_pBase->InvokeCommand(CmdId);
+	}
 };
 
 //////////////////////////////////////////////////////////////////////////////
@@ -242,13 +239,13 @@ public:
 //  C style functions
 //
 
-HRESULT FileViewBase_CreateObject(HINSTANCE hInstance,IFileViewBaseWindow **pObject)
+HRESULT FileViewBase_CreateObject(HINSTANCE hInstance,IViewBaseWindow **pObject)
 {
 	CFileViewBase *pWnd = new CFileViewBase;
 
 	CFileViewBase::RegisterClass(hInstance);
 
-	*pObject = static_cast<IFileViewBaseWindow *>(pWnd);
+	*pObject = static_cast<IViewBaseWindow *>(pWnd);
 
 	return S_OK;
 }

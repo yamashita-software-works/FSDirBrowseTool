@@ -15,16 +15,17 @@
 //
 #include "stdafx.h"
 #include "resource.h"
-#include "dirbrowsehost.h"
-#include "dirbrowsetraverser.h"
-#include "dirbrowseview.h"
+#include "wfsdirbrowsetool.h"
+#include "dirinfowindow.h"
+#include "dirinfoview.h"
+#include "dirtraverser.h"
 
 class CDirectoryBrowserHost : public CBaseWindow
 {
 public:
 	HWND m_hWndTreeBase;
 
-	IFileViewBaseWindow *m_pFileViewWnd;
+	IViewBaseWindow *m_pFileViewWnd;
 	int m_cxSplitPos;
 
 	HWND m_hWndCtrlFocus;
@@ -56,6 +57,8 @@ public:
 		DestroyIcon((HICON)SendMessage(GetParent(m_hWnd),WM_GETICON,ICON_SMALL,0));
 		SendMessage(GetParent(m_hWnd),WM_SETICON,ICON_SMALL,(LPARAM)sii.hIcon);
 		//--todo:
+
+		m_hWndCtrlFocus = m_hWndTreeBase;
 
 		return 0;
 	}
@@ -112,9 +115,9 @@ public:
 			case ID_UP_DIR:
 				DirectoryTraverser_SelectFolder(m_hWndTreeBase,L"..",0);
 				break;
-			case ID_EDIT_COPY:
+			default:
 				if( m_hWndCtrlFocus == m_pFileViewWnd->GetHWND() )
-					Sleep(0);
+					m_pFileViewWnd->InvokeCommand(LOWORD(wParam));
 				break;
 		}
 		return 0;
@@ -134,20 +137,52 @@ public:
 		return 0;
 	}
 
+	LRESULT OnNotifyMessage(HWND hWnd,UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		switch( LOWORD(wParam) )
+		{
+			case CTRL_DIRECTORY_CHANGED:
+				OnNotifyChangeDirectory( (SELECT_ITEM*)lParam );
+				break;
+			case CTRL_PATH_SELECTED:
+				OnUpdateInformationView( (SELECT_ITEM*)lParam );
+				break;
+		}
+		return 0;
+	}
+
 	LRESULT OnControlMessage(HWND hWnd,UINT uMsg, WPARAM wParam, LPARAM lParam)
 	{
 		switch( LOWORD(wParam) )
 		{
-			case CODE_SELECT_PATH:
-				OnUpdateInformationView( (SELECT_FILE*)lParam );
-				break;
-			case CODE_CHANGE_DIRECTORY:
-				OnChangeDirectory( (SELECT_FILE*)lParam );
-				break;
-			case CODE_ASYNC_UPDATE_PATH:
-				OnAsyncUpdatePath( (PWSTR)lParam );
-				break;
+			case CTRL_SET_DIRECTORY:
+				return OnSetDirectory(m_hWnd,0,0,lParam);
 		}
+		return 0;
+	}
+
+	LRESULT OnSetDirectory(HWND hWnd,UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		PCWSTR pszDirectoryPath = (PCWSTR)lParam;
+		PWSTR pszPath;
+		if( IsNtDevicePath(pszDirectoryPath) )
+			pszPath = DuplicateString(pszDirectoryPath);
+		else
+			pszPath = DosPathNameToNtPathName(pszDirectoryPath);
+
+		if( PathFileExists_W(pszPath,NULL) )
+		{
+			InitData(pszPath);
+		}
+
+		FreeMemory(pszPath);
+
+		return 0;
+	}
+
+	LRESULT OnInitLayout(HWND hWnd,UINT uMsg, WPARAM wParam, LPARAM lParam)
+	{
+		InitLayout((const RECT *)lParam);
 		return 0;
 	}
 
@@ -161,6 +196,8 @@ public:
 				return OnSize(hWnd,uMsg,wParam,lParam);
 			case WM_QUERY_CMDSTATE:
 				return OnQueryCmdState(hWnd,uMsg,wParam,lParam);
+			case WM_NOTIFY_MESSAGE:
+				return OnNotifyMessage(hWnd,uMsg,wParam,lParam);
 			case WM_CONTROL_MESSAGE:
 				return OnControlMessage(hWnd,uMsg,wParam,lParam);
 			case WM_COMMAND:
@@ -188,33 +225,29 @@ public:
 		EndDeferWindowPos(hdwp);
 	}
 
-	VOID OnUpdateInformationView(SELECT_FILE* pFile)
+	VOID OnUpdateInformationView(SELECT_ITEM* pFile)
 	{
-		m_pFileViewWnd->SelectData(pFile);
+		m_pFileViewWnd->SelectPage(pFile);
 	}
 
-	VOID OnChangeDirectory(SELECT_FILE* pFile)
+	VOID OnNotifyChangeDirectory(SELECT_ITEM* pFile)
 	{
 		PWSTR pszPath;
 
 		if( wcscmp(pFile->pszName,L"..") == 0 )
 		{
-			pszPath = _MemAllocString(pFile->pszLocation);
+			pszPath = _MemAllocString(pFile->pszCurDir);
 			RemoveFileSpec(pszPath);
 		}
 		else
-			pszPath = _MemAllocString(pFile->pszPath);
-
-		PostMessage(m_hWnd,WM_CONTROL_MESSAGE,CODE_ASYNC_UPDATE_PATH,(LPARAM)pszPath);
-	}
-
-	VOID OnAsyncUpdatePath( PWSTR pszPath )
-	{
-		if( pszPath )
 		{
-			FillTraversetItems(pszPath);
-			_MemFree(pszPath); // free queued path buffer
+			pszPath = _MemAllocString(pFile->pszPath);
 		}
+
+		// update MDI child title
+		SetWindowText( GetParent(m_hWnd), PathFindFileName(pszPath) ); // todo:
+
+		_MemFree(pszPath);
 	}
 
 	VOID InitData(PCWSTR pszDirectoryPath)
@@ -248,31 +281,4 @@ HWND DirectoryBrowseTool_CreateWindow(HWND hWndParent)
 	CDirectoryBrowserHost *pView = new CDirectoryBrowserHost;
 
 	return pView->Create(hWndParent,0,L"DirectoryFilePropertyBrowserWnd",WS_CHILD|WS_VISIBLE|WS_CLIPCHILDREN,WS_EX_CONTROLPARENT);
-}
-
-VOID DirectoryBrowseTool_InitData(HWND hWndViewHost,PCWSTR pszDirectoryPath)
-{
-	CDirectoryBrowserHost *pWnd = (CDirectoryBrowserHost *)GetBaseWindowObject(hWndViewHost);
-	if( pWnd )
-	{
-		PWSTR pszPath;
-		if( IsNtDevicePath(pszDirectoryPath) )
-			pszPath = DuplicateString(pszDirectoryPath);
-		else
-			pszPath = DosPathNameToNtPathName(pszDirectoryPath);
-
-		if( PathFileExists_W(pszPath,NULL) )
-		{
-			pWnd->InitData(pszPath);
-		}
-
-		FreeMemory(pszPath);
-	}
-}
-
-VOID DirectoryBrowseTool_InitLayout(HWND hWndViewHost,const RECT *prcDesktopWorkArea)
-{
-	CDirectoryBrowserHost *pWnd = (CDirectoryBrowserHost *)GetBaseWindowObject(hWndViewHost);
-	if( pWnd )
-		pWnd->InitLayout(prcDesktopWorkArea);
 }

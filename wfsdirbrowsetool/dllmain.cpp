@@ -1,5 +1,5 @@
 #include "stdafx.h"
-#include "dirbrowsehost.h"
+#include "dirinfowindow.h"
 
 HINSTANCE hInstance = NULL;
 
@@ -29,6 +29,7 @@ BOOL APIENTRY DllMain( HMODULE hModule,
 	return TRUE;
 }
 
+
 EXTERN_C
 HWND
 WINAPI
@@ -39,26 +40,7 @@ CreateDirectoryBrowseTool(
 	return DirectoryBrowseTool_CreateWindow(hwnd);
 }
 
-EXTERN_C
-BOOL
-WINAPI
-InitDirectoryBrowseTool(
-	HWND hwndDBT,
-	PCWSTR pszPath,
-	RECT *prc
-	)
-{
-	WCHAR szCurPath[MAX_PATH];
-	if( pszPath == NULL )
-	{
-		GetCurrentDirectory(MAX_PATH,szCurPath);
-		pszPath = szCurPath;
-	}
-	DirectoryBrowseTool_InitData(hwndDBT,pszPath);
-	DirectoryBrowseTool_InitLayout(hwndDBT,prc);
-	return TRUE;
-}
-
+// module global
 static HIMAGELIST m_himl = NULL;
 static int m_iImageUpDir = I_IMAGENONE;
 
@@ -77,6 +59,12 @@ HIMAGELIST GetGlobalShareImageList()
 		// do not call ImageList_Destroy using them.
 		//
 		Shell_GetImageLists(NULL,&m_himl);
+
+#ifdef _DEBUG
+		int cImages;
+		cImages = ImageList_GetImageCount(m_himl);
+		_TRACE("System image count=%u\n",cImages);
+#endif
 
 		int cx,cy;
 		ImageList_GetIconSize(m_himl,&cx,&cy);

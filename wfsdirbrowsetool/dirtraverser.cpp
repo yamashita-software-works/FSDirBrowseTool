@@ -15,7 +15,7 @@
 //
 #include "stdafx.h"
 #include "basewindow.h"
-#include "dirbrowsetraverser.h"
+#include "dirtraverser.h"
 
 #define WC_FOLDERTREEWINDOW L"DirectoryTraverserWnd"
 
@@ -122,7 +122,7 @@ public:
 				if( dwFileAttributes & FILE_ATTRIBUTE_REPARSE_POINT )
 					fOverlay |= (SHGFI_LINKOVERLAY|SHGFI_OVERLAYINDEX);
 
-				SHGetFileInfo(&pszFileName[4],dwFileAttributes,&sfi,sizeof(sfi),SHGFI_SMALLICON|SHGFI_SYSICONINDEX|SHGFI_USEFILEATTRIBUTES|fOverlay);
+				SHGetFileInfo(&pszPath[4],dwFileAttributes,&sfi,sizeof(sfi),SHGFI_SMALLICON|SHGFI_SYSICONINDEX|SHGFI_USEFILEATTRIBUTES|fOverlay);
 
 				if( sfi.hIcon != NULL )
 					DestroyIcon(sfi.hIcon);
@@ -178,14 +178,6 @@ public:
 			}
 		}
 
-#if 0
-		{
-			WCHAR sz[64];
-			StringCchPrintf(sz,ARRAYSIZE(sz),L"Image Index=%d\n",iImage);
-			_TRACEW(sz);
-		}
-#endif
-
 		return iImage;
 	}
 
@@ -214,8 +206,10 @@ public:
 		return h;
 	}
 
-	DWORD UpdateView( PCWSTR pszDirectoryPath )
+	DWORD UpdateView( PCWSTR pszDirectoryPath, PCWSTR pszFileName )
 	{
+		HTREEITEM hSelect,hCurDir;
+
 		SetRedraw(m_hWndTree,FALSE);
 		m_bPreventAction = TRUE;
 
@@ -226,8 +220,6 @@ public:
 
 		if( dwError == ERROR_SUCCESS )
 		{
-			HTREEITEM hSelect;
-
 			_SafeMemFree( m_pszDirectoryPath );
 
 			// Prevent repeated notification message of selection item at next DeleteAllItems.
@@ -246,7 +238,7 @@ public:
 			//
 			ULONG FileAttributes = 0;
 			PathFileExists_W(pszDirectoryPath,&FileAttributes);
-			hSelect = AddItem(ITEM_FOLDER_ROOT,PathFindFileName(pszDirectoryPath),pszDirectoryPath,pszDirectoryPath,FileAttributes,TVI_ROOT,TVI_SORT,0);
+			hSelect = hCurDir = AddItem(ITEM_FOLDER_ROOT,PathFindFileName(pszDirectoryPath),pszDirectoryPath,pszDirectoryPath,FileAttributes,TVI_ROOT,TVI_SORT,0);
 
 			InsertBlank(TVI_ROOT,TVI_LAST);
 
@@ -255,13 +247,32 @@ public:
 			//
 			FillTreeItems(pa);
 
+			//
+			// Free item list.
+			//
 			FreeFileItems(pa);
+
+			//
+			// Select item.
+			//
+			if( pszFileName )
+			{
+				hSelect = FindItem(pszFileName);
+				if( hSelect == NULL )
+					hSelect = hCurDir;
+			}
 
 			TreeView_Select(m_hWndTree,hSelect,TVGN_CARET);
 		}
 
 		m_bPreventAction = FALSE;
 		SetRedraw(m_hWndTree,TRUE);
+
+		//
+		// Ensures visible a selected item (must be after call SetRedraw(TRUE)).
+		//
+		if( pszFileName )
+			TreeView_EnsureVisible(m_hWndTree,hSelect);
 
 		return dwError;
 	}
@@ -324,6 +335,8 @@ public:
 		int cFiles = 0;
 		int i,cItems = pa.GetCount();
 
+		TREEITEMTYPE t = (m_dwStyle & DTS_DIRECTORYNAVIGATION) ? ITEM_FOLDER_PATH : ITEM_FOLDER_DIRECTORY;
+
 		for(i = 0; i < cItems; i++)
 		{
 			CFileItem *pItem = pa.Get(i);
@@ -335,7 +348,7 @@ public:
 			{
 				if( m_dwStyle & DTS_DIRECTORYNAMES )
 				{
-					AddItem(ITEM_FOLDER_DIRECTORY,pItem->hdr.FileName,pItem->hdr.FileName,NULL,pItem->FileAttributes,TVI_ROOT,TVI_LAST,0);
+					AddItem(t,pItem->hdr.FileName,pItem->hdr.FileName,NULL,pItem->FileAttributes,TVI_ROOT,TVI_LAST,0);
 				}
 			}
 			else
@@ -394,18 +407,28 @@ public:
 		return hItem;
 	}
 
-	VOID NotifyHost(USHORT code,PCWSTR pszLocation,PCWSTR pszText,PCWSTR pszFullPath,TREEITEM *pItem)
+	VOID NotifyHost(USHORT code,PCWSTR pszCurDir,PCWSTR pszText,PCWSTR pszFullPath,TREEITEM *pItem)
 	{
 		WPARAM wParam;
 		wParam = MAKEWPARAM(code,0); // hiword:reserved
 
-		SELECT_FILE path;
+		SELECT_ITEM path;
 		path.pszPath = (PWSTR)pszFullPath;
 		path.pszName = (PWSTR)pszText; 
-		path.pszLocation = (PWSTR)pszLocation;
-		path.Type = pItem->ItemType;
+		path.pszCurDir = (PWSTR)pszCurDir;
 
-		SendMessage(m_hWndNotice,WM_CONTROL_MESSAGE,wParam,(LPARAM)&path);
+		switch( pItem->ItemType )
+		{
+			case ITEM_FOLDER_ROOT:
+				path.ViewType = VIEW_ROOT;
+				break;
+			case ITEM_FOLDER_DIRECTORY:
+			case ITEM_FOLDER_FILENAME:
+				path.ViewType = VIEW_FILEINFO;
+				break;
+		}
+
+		SendMessage(m_hWndNotice,WM_NOTIFY_MESSAGE,wParam,(LPARAM)&path);
 	}
 
 	HWND CreateFolderTreeView(HWND hwndParent)
@@ -416,7 +439,7 @@ public:
 							WC_TREEVIEW,
 							TEXT("DirectoryTraverser"),
 							WS_VISIBLE|WS_CHILD|WS_TABSTOP|TVS_DISABLEDRAGDROP|TVS_NOHSCROLL|
-							TVS_HASBUTTONS|TVS_LINESATROOT|TVS_INFOTIP|TVS_FULLROWSELECT|TVS_NONEVENHEIGHT|TVS_SHOWSELALWAYS, 
+							TVS_HASBUTTONS|/*TVS_LINESATROOT|*/TVS_INFOTIP|TVS_FULLROWSELECT|TVS_NONEVENHEIGHT|TVS_SHOWSELALWAYS, 
 							0, 0, 0, 0,
 							hwndParent, 
 							(HMENU)ID_TREEVIEW, 
@@ -438,8 +461,6 @@ public:
 
 		TreeView_SetIndent(hwndTreeView,cx/2);
 		TreeView_SetItemHeight(hwndTreeView,cy+8);
-
-		TreeView_SetBkColor(hwndTreeView,RGB(243,243,243)); // dark mode not considering
 
 		return hwndTreeView;
 	}
@@ -505,7 +526,6 @@ public:
 				ptvdi->item.mask |= TVIF_STATE;
 				ptvdi->item.iImage &= 0x00FFFFFF;
 			}
-
 		}
 
 		return 0;
@@ -521,7 +541,7 @@ public:
 			{
 				if( pItem->Path != NULL )
 				{
-					NotifyHost(CODE_SELECT_PATH,pItem->Path,pItem->FileName,pItem->Path,pItem);
+					NotifyHost(CTRL_PATH_SELECTED,pItem->Path,pItem->FileName,pItem->Path,pItem);
 				}
 				else
 				{
@@ -530,7 +550,7 @@ public:
 						PWSTR pszFullPath;
 						pszFullPath = CombinePath(m_pszDirectoryPath,pItem->FileName);
 						{
-							NotifyHost(CODE_SELECT_PATH,m_pszDirectoryPath,pItem->FileName,pszFullPath,pItem);
+							NotifyHost(CTRL_PATH_SELECTED,m_pszDirectoryPath,pItem->FileName,pszFullPath,pItem);
 							FreeMemory(pszFullPath);
 						}
 					}
@@ -584,17 +604,30 @@ public:
 			{
 				if(pItem->FileAttributes & FILE_ATTRIBUTE_DIRECTORY )
 				{
-					PWSTR pszFullPath;
+					PWSTR pszFullPath = NULL;
+					PWSTR pszSelectFileName = NULL;
+
 					if( wcscmp(pItem->FileName,L"..") == 0 )
+					{
+						pszSelectFileName = PathFindFileName(m_pszDirectoryPath);
+						pszSelectFileName = DuplicateString(pszSelectFileName);
+
 						pszFullPath = DuplicateString(m_pszDirectoryPath);
+						RemoveFileSpec(pszFullPath);
+					}
 					else
+					{
 						pszFullPath = CombinePath(m_pszDirectoryPath,pItem->FileName);
+					}
 
 					if( pszFullPath )
 					{
-						NotifyHost(CODE_CHANGE_DIRECTORY,m_pszDirectoryPath,pItem->FileName,pszFullPath,pItem);
-						FreeMemory(pszFullPath);
+						NotifyHost(CTRL_DIRECTORY_CHANGED,m_pszDirectoryPath,pItem->FileName,pszFullPath,pItem);
+						UpdateView(pszFullPath,pszSelectFileName);
 					}
+
+					FreeMemory(pszFullPath);
+					FreeMemory(pszSelectFileName);
 				}
 			}
 		}
@@ -602,13 +635,6 @@ public:
 
 	LRESULT OnCustomDraw(LPNMLVCUSTOMDRAW pcd)
 	{
-// toto:
-//		if( IsXpThemeEnabled() )
-//			return CDRF_DODEFAULT;
-
-		//
-		// classic mode only
-		//
 		if( pcd->nmcd.dwDrawStage == CDDS_PREPAINT )
 		{
 			return CDRF_NOTIFYITEMDRAW;
@@ -688,22 +714,7 @@ public:
 
 				if( hNextItem )
 				{
-#if 0
-					TREEITEM *pItem = (TREEITEM *)TreeView_GetItemData(m_hWndTree,hNextItem);
-					if( pItem->ItemType == ITEM_FOLDER_ROOT )
-					{
-						TreeView_EnsureVisible(m_hWndTree, TreeView_GetPrevSibling(m_hWndTree,hNextItem) );
-					}
-					else
-					{
-						if( TreeView_GetLastVisible(m_hWndTree) == hNextItem )
-						{
-							TreeView_EnsureVisible(m_hWndTree, hNextItem);
-						}
-					}
-#else
 					TreeView_EnsureVisible(m_hWndTree, hNextItem);
-#endif
 				}
 				SetRedraw(m_hWndTree,TRUE);
 			}
@@ -827,7 +838,7 @@ HRESULT DirectoryTraverser_FillItems(HWND hWnd,PCWSTR pszDirectoryPath)
 	CDirectoryTraverser *pObj = (CDirectoryTraverser *)GetBaseWindowObject(hWnd);
 	if( pObj )
 	{
-		return HRESULT_FROM_WIN32( pObj->UpdateView(pszDirectoryPath) );
+		return HRESULT_FROM_WIN32( pObj->UpdateView(pszDirectoryPath,NULL) );
 	}
 	return E_FAIL;
 }

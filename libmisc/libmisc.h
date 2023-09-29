@@ -150,9 +150,26 @@ _GetDateTimeFromFileTime(
 	int cchTextMax
 	);
 
+BOOL
+WINAPI
+_OpenByExplorerEx(
+	HWND hWnd,
+	LPCTSTR pszPath,
+	LPCTSTR pszCurrentDirectory,
+	BOOL bAdmin
+	);
+
+BOOL
+WINAPI
+SHFileIconInit(
+	BOOL fRestoreCache
+	);
+
 #ifdef __cplusplus
 
-// simple heap string buffer
+//
+// Simple heap string buffer
+//
 class CStringBuffer
 {
 	wchar_t *m_psz;
@@ -188,6 +205,9 @@ public:
 
 #endif
 
+//
+// Clipboard Helper
+//
 #define SEPCHAR_TAB    0x1 
 #define SEPCHAR_COMMA  0x2
 #define SEPCHAR_SPACE  0x0
@@ -209,3 +229,40 @@ SetClipboardText(
 	PVOID pszCopyString,
 	ULONG CodeType
 	);
+
+#define SCTEXT_FORMAT_CSV          0x00000001
+#define SCTEXT_FORMAT_TSV          0x00000002
+#define SCTEXT_FORMAT_SELECTONLY   0x00004000
+#define SCTEXT_FORMAT_DOUBLEQUATE  0x00008000
+
+LONG
+WINAPI
+SetClipboardTextFromListViewColumn(
+	HWND hwndLV,
+	UINT uFormat,
+	int iColumn
+	);
+
+//
+// Win32 ListView Control Helper
+//
+EXTERN_C
+BOOL
+WINAPI
+ListViewEx_AdjustWidthAllColumns(
+	HWND hwndLV,
+	UINT Flags
+	);
+
+//
+// RECT Helper
+//
+#define _RECT_WIDTH(rc) (rc.right-rc.left)
+#define _RECT_HIGHT(rc) (rc.bottom-rc.top)
+
+//
+// Helper macro
+//
+#define SetRedraw(h,f)	SendMessage(h,WM_SETREDRAW,(WPARAM)f,0)
+#define GETINSTANCE(hWnd)   (HINSTANCE)GetWindowLongPtr(hWnd,GWLP_HINSTANCE)
+#define GETCLASSBRUSH(hWnd) (HBRUSH)GetClassLongPtr(hWnd,GCLP_HBRBACKGROUND)

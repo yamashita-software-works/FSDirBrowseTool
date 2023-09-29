@@ -49,6 +49,7 @@ LRESULT CALLBACK MDIChildWndProc(HWND hWnd,UINT msg,WPARAM wParam,LPARAM lParam)
 			MDICREATEPARAM *pmcp = (MDICREATEPARAM *)pmdics->lParam;
 
 			MDICLIENTWNDDATA *pd = new MDICLIENTWNDDATA;
+			ZeroMemory(pd,sizeof(MDICLIENTWNDDATA));
 			SetWindowLongPtr(hWnd,GWLP_USERDATA,(LONG_PTR)pd);
 			break;
 		}
@@ -144,7 +145,7 @@ HWND CreateMDIClient(HWND hWnd)
 	return hWndMDIClient;
 }
 
-HWND CreateMDIChildFrame(HWND hWndMDIClient,PCWSTR pszTitle,LPARAM lParam)
+HWND CreateMDIChildFrame(HWND hWndMDIClient,PCWSTR pszTitle,LPARAM lParam,BOOL bMaximize)
 { 
     HWND hwnd; 
     MDICREATESTRUCT mcs = {0};
@@ -157,12 +158,13 @@ HWND CreateMDIChildFrame(HWND hWndMDIClient,PCWSTR pszTitle,LPARAM lParam)
     mcs.style = WS_VISIBLE | WS_MINIMIZEBOX | WS_MAXIMIZEBOX | WS_CAPTION | WS_CLIPCHILDREN; 
 	mcs.lParam = lParam;
 
-	BOOL bMaximize;
-	if( SendMessage(hWndMDIClient,WM_MDIGETACTIVE,0,(LPARAM)&bMaximize) != NULL )
+	if( !bMaximize )
 	{
-		if( bMaximize )
-			mcs.style |= WS_MAXIMIZE;
+		SendMessage(hWndMDIClient,WM_MDIGETACTIVE,0,(LPARAM)&bMaximize);
 	}
+
+	if( bMaximize )
+		mcs.style |= WS_MAXIMIZE;
 
 #if 0
 	else if( bFullSize )

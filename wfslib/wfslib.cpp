@@ -202,7 +202,9 @@ NtPathTranslatePath(
 	)
 {
     HANDLE hObjDir;
-    LONG Status;
+    NTSTATUS Status;
+	DWORD dwError;
+	BOOL bResult = FALSE;
     ULONG Index = 0;
     WCHAR SymName[260];
     UNICODE_STRING usNtPathVolume;
@@ -253,7 +255,7 @@ NtPathTranslatePath(
 
     if( Status == STATUS_SUCCESS )
     {
-        while( QueryObjectDirectory(hObjDir,&Index,SymName,ARRAYSIZE(SymName),NULL,0) == 0 )
+        while( (dwError = QueryObjectDirectory(hObjDir,&Index,SymName,ARRAYSIZE(SymName),NULL,0)) == ERROR_SUCCESS )
         {
 			if( cmp_fnc(SymName,&usNtPathVolume) )
             {
@@ -266,6 +268,7 @@ NtPathTranslatePath(
 						StringCchCat(pszPath,cchPath,L"\\\\?\\"); // win32 file namespace
 					StringCchCat(pszPath,cchPath,SymName);
 					StringCchCat(pszPath,cchPath,usVolumeRelativePath.Buffer);
+					bResult = TRUE;
 					break;
 				}
 			}
@@ -274,7 +277,9 @@ NtPathTranslatePath(
         CloseObjectDirectory( hObjDir );
     }
 
-    return Status;
+	_SetLastStatusDos( bResult ? STATUS_SUCCESS : STATUS_OBJECT_NAME_NOT_FOUND );
+
+    return bResult;
 }
 
 EXTERN_C

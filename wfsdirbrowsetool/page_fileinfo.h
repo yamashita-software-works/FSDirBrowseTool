@@ -5,7 +5,7 @@
 //  Create: 2022-04-04,2022-05-03
 //
 #include "stdafx.h"
-#include "dirbrowseview.h"
+#include "dirinfoview.h"
 #include "fileinfo.h"
 #include "ntreparsepointtag.h"
 
@@ -451,7 +451,7 @@ public:
 			SELECT_TITLE sp;
 			sp.pFileInfo = m_pFI;
 			sp.TitleId = (UINT)pnmlv->lParam;
-			SendMessage(GetParent(m_hWnd),WM_CONTROL_MESSAGE,CODE_SELECT_ITEM,(LPARAM)&sp);
+			SendMessage(GetParent(m_hWnd),WM_NOTIFY_MESSAGE,CTRL_ITEM_SELECTED,(LPARAM)&sp);
 		}
 
 		return 0;
@@ -677,7 +677,7 @@ public:
 		return (ListView_SetGroupInfo(m_hWndList,iGroupId,&lvg) != -1);
 	}
 
-	HRESULT FillItems(SELECT_FILE *pFile)
+	HRESULT FillItems(SELECT_ITEM *pFile)
 	{
 		SetRedraw(m_hWndList,FALSE);
 
@@ -932,12 +932,18 @@ public:
 
 	virtual HRESULT UpdateData(PVOID pFile)
 	{
-		return FillItems((SELECT_FILE*)pFile);
+		return FillItems((SELECT_ITEM*)pFile);
 	}	
 
-	virtual HRESULT CommandHandler(UINT CmdId)
+	virtual HRESULT InvokeCommand(UINT CmdId)
 	{
-		return E_NOTIMPL;
+		switch( CmdId )
+		{
+			case ID_EDIT_COPY:
+				OnCmdEditCopy();
+				break;
+		}
+		return S_OK;
 	}
 
 	virtual HRESULT QueryCmdState(UINT CmdId,UINT *State)
@@ -945,9 +951,21 @@ public:
 		switch( CmdId )
 		{
 			case ID_EDIT_COPY:
-				*State = ListView_GetSelectedCount(m_hWndList) ? 0x0 : 0x100;
+				*State = ListView_GetSelectedCount(m_hWndList) ? UPDUI_ENABLED : UPDUI_DISABLED;
 				return S_OK;
 		}
 		return S_FALSE;
+	}
+
+	void OnCmdEditCopy()
+	{
+		if( GetKeyState(VK_SHIFT) < 0 )
+		{
+			SetClipboardTextFromListViewColumn(m_hWndList,SCTEXT_FORMAT_SELECTONLY,1);
+		}
+		else
+		{
+			SetClipboardTextFromListView(m_hWndList,SCTEXT_UNICODE);
+		}
 	}
 };

@@ -97,9 +97,9 @@ INCLUDES=$(INCLUDES);..\inc
 #----------------------------------------------------------
 SOURCES = \
 	dllmain.cpp \
-	dirbrowsehost.cpp\
-	dirbrowsetraverser.cpp\
-	dirbrowseview.cpp\
+	dirinfowindow.cpp\
+	dirinfoview.cpp\
+	dirtraverser.cpp\
 	fileinfo.cpp\
 	wfsdirbrowsetool.rc
 

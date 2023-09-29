@@ -38,12 +38,6 @@
 #include "debug.h"
 #include "mem.h"
 #include "libmisc.h"
-
-#define SetRedraw(h,f)	SendMessage(h,WM_SETREDRAW,(WPARAM)f,0)
-#define GETINSTANCE(hWnd)   (HINSTANCE)GetWindowLongPtr(hWnd,GWLP_HINSTANCE)
-#define GETCLASSBRUSH(hWnd) (HBRUSH)GetClassLongPtr(hWnd,GCLP_HBRBACKGROUND)
-HINSTANCE _GetResourceInstance();
-
 #include "dparray.h"
 #include "..\wfslib\wfslib.h"
 #include "..\libntwdk\libntwdk.h"
@@ -51,6 +45,8 @@ HINSTANCE _GetResourceInstance();
 #include "..\inc\common_resid.h"
 
 #define  _ASSERT ASSERT
+
+HINSTANCE _GetResourceInstance();
 
 //
 // Data definitions
@@ -153,29 +149,20 @@ typedef enum {
 	ITEM_FOLDER_DIRECTORY,
 	ITEM_FOLDER_FILENAME,
 	ITEM_FOLDER_ROOT,
+	ITEM_FOLDER_PATH,
 	ITEM_BLANK,
 	ITEM_GROUP,
 } TREEITEMTYPE;
 
 //
-// WM_CONTROL_MESSAGE
+// View Type
 //
-#define WM_CONTROL_MESSAGE  (WM_APP+2000)
-
-// WPARAM LOWORD(f)
-#define CODE_SELECT_PATH        (0x0001)
-#define CODE_CHANGE_DIRECTORY   (0x0002)
-#define CODE_ASYNC_UPDATE_PATH  (0x0003)
-#define CODE_SELECT_ITEM        (0x0004)
-
-typedef struct _SELECT_FILE
-{
-	UINT mask;
-	PWSTR pszPath;
-	PWSTR pszName;
-	PWSTR pszLocation;
-	UINT Type;
-} SELECT_FILE;
+enum {
+	VIEW_CURRENT=0,
+	VIEW_ROOT,
+	VIEW_FILEINFO,
+	MAX_INFO_VIEW_TYPE,
+};
 
 typedef struct _SELECT_TITLE
 {

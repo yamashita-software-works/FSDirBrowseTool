@@ -2,4 +2,3 @@ LIBRARY "wfsdirbrowsetool"
 
 EXPORTS
 	CreateDirectoryBrowseTool
-	InitDirectoryBrowseTool

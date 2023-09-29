@@ -31,5 +31,6 @@ INCLUDES=$(INCLUDES);..\libcwh
 C_DEFINES=$(C_DEFINES) -DUNICODE -D_UNICODE 
 
 SOURCES=\
-	libmisc.cpp
+	libmisc.cpp\
+	clipboardtext.cpp
 

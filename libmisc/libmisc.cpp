@@ -417,3 +417,82 @@ VOID WINAPI _GetDateTimeFromFileTime(FILETIME *DateTime,LPTSTR pszText,int cchTe
 	li.LowPart  = DateTime->dwLowDateTime;
 	_GetDateTime(li.QuadPart,pszText,cchTextMax);
 }
+
+//
+// Win32 Shell API Helper
+//
+BOOL
+WINAPI
+SHFileIconInit(
+	BOOL fRestoreCache
+	)
+{
+	BOOL bResult = FALSE;
+	static BOOL (WINAPI *pfnFileIconInit)(BOOL fRestoreCache) = NULL;
+	HMODULE hModule = LoadLibrary(L"SHELL32");
+
+	if( hModule )
+	{
+		(FARPROC&)pfnFileIconInit = GetProcAddress(hModule,(LPCSTR)660);
+		if( pfnFileIconInit )
+			bResult = pfnFileIconInit(fRestoreCache);
+		FreeLibrary(hModule);
+	}
+	return bResult;
+}
+
+BOOL
+WINAPI
+_OpenByExplorerEx(
+	HWND hWnd,
+	LPCTSTR pszPath,
+	LPCTSTR pszCurrentDirectory,
+	BOOL bAdmin
+	)
+{
+	BOOL bSuccess;
+	if( bAdmin )
+	{
+		// effective for .exe file only.
+		SHELLEXECUTEINFO sei = {0};
+		sei.cbSize = sizeof(sei);
+		sei.fMask = 0;
+		sei.lpFile = pszPath;
+		sei.lpDirectory = pszCurrentDirectory;
+		sei.lpParameters = NULL;
+		sei.lpVerb = L"runas";
+		sei.nShow  = SW_SHOWNORMAL;
+		bSuccess = ShellExecuteEx( &sei );
+	}
+	else
+	{
+		HINSTANCE h;
+		h = ShellExecute(hWnd,_T("open"),pszPath,NULL,pszCurrentDirectory,SW_SHOW);
+		if( (INT_PTR)h <= 32 )
+			bSuccess = FALSE;
+		else
+			bSuccess = TRUE;
+	}
+	return bSuccess;
+}
+
+//
+// Win32 ListView Control Helper
+//
+EXTERN_C
+BOOL
+WINAPI
+ListViewEx_AdjustWidthAllColumns(
+	HWND hwndLV,
+	UINT Flags
+	)
+{
+	HWND hwndHD = ListView_GetHeader(hwndLV);
+	int i,cHeaders = Header_GetItemCount(hwndHD);
+	int cx = Flags & 0x1 ? LVSCW_AUTOSIZE_USEHEADER : LVSCW_AUTOSIZE;
+	for(i = 0; i < cHeaders; i++)
+	{
+		ListView_SetColumnWidth(hwndLV,i,cx);
+	}
+	return TRUE;
+}

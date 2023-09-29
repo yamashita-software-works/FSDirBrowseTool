@@ -41,6 +41,8 @@
 #include "..\libmisc\libmisc.h"
 #include "..\inc\common.h"
 #include "..\inc\common_resid.h"
+#include "..\inc\appdef_resid.h"
+#include "menu.h"
 
 #define SetRedraw(h,f)	SendMessage(h,WM_SETREDRAW,(WPARAM)f,0)
 

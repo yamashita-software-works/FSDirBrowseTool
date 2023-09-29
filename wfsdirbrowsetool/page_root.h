@@ -1,6 +1,6 @@
 #pragma once
 
-#include "dirbrowseview.h"
+#include "dirinfoview.h"
 
 class CRootView : public CPageWndBase
 {
@@ -23,10 +23,10 @@ public:
 	virtual HRESULT UpdateData(PVOID pv)
 	{
 		// todo: sample demo.
-		SELECT_FILE *pFile = (SELECT_FILE*)pv;
+		SELECT_ITEM *pFile = (SELECT_ITEM*)pv;
 
 		_SafeMemFree(m_pszText);
-		m_pszText = _MemAllocString(pFile->pszLocation);
+		m_pszText = _MemAllocString(pFile->pszPath);
 
 		return S_OK;
 	}

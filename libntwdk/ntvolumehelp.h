@@ -22,7 +22,8 @@ OpenVolume(
     HANDLE *pHandle
     );
 
-#define OPEN_READ_DATA  0x1
+#define OPEN_READ_DATA     0x1
+#define OPEN_GENERIC_READ  0x2
 
 EXTERN_C
 NTSTATUS

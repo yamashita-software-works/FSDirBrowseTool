@@ -5,7 +5,7 @@
 
 ATOM RegisterMDIChildFrameClass(HINSTANCE hInstance);
 HWND CreateMDIClient(HWND hWnd);
-HWND CreateMDIChildFrame(HWND hWndMDIClient,PCWSTR pszTitle,LPARAM pParam);
+HWND CreateMDIChildFrame(HWND hWndMDIClient,PCWSTR pszTitle,LPARAM lParam,BOOL bMaximize);
 
 __inline HWND MDIGetActiveChild(HWND hwndMDIClient) { return (HWND)SendMessage(hwndMDIClient,WM_MDIGETACTIVE,0,0); }
 

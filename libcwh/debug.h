@@ -5,6 +5,8 @@
 // 2001.03.02 - Update
 // 2001.10.16 - Update
 
+#ifndef _SIMPLE_DEBUG_HELPER_
+#define _SIMPLE_DEBUG_HELPER_
 #pragma warning(push)
 #pragma warning(disable : 4995)
 
@@ -100,10 +102,6 @@ inline void _cdecl _TraceExW(LPCWSTR lpszFormat, ...)
 
 #define _TRACE _TRACEA  // Always mapping ANSI version
 
-//#define TRACE1  _TRACE
-//#define TRACE2  _TRACE
-//#define TRACE3  _TRACE
-
 #else
 
 // For Release build. 
@@ -113,10 +111,9 @@ inline void _cdecl _TraceExW(LPCWSTR lpszFormat, ...)
 #define _NOP  NULL
 #endif
 
+#ifndef TRACE
 #define TRACE(f)            _NOP
-//#define TRACE1(f,p1)        _NOP
-//#define TRACE2(f,p1,p2)     _NOP
-//#define TRACE3(f,p1,p2,p3)  _NOP
+#endif
 
 #define ASSERT              _NOP
 #define _RuntimeAssert(exp) _VERIFYA(exp)  // Always mapping ANSI version
@@ -130,3 +127,4 @@ inline void _cdecl _TraceExW(LPCWSTR lpszFormat, ...)
 #endif
 
 #pragma warning(pop)
+#endif

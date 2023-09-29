@@ -15,27 +15,16 @@
 #include "wfsdirbrowse.h"
 #include "mdichild.h"
 
- #define _ENABLE_INITIALIZE_ASYNC_OPEN  0
-
-static WCHAR *pszTitle = L"Directory Browse Tool";
-static WCHAR *pszWindowClass = L"DirectoryBrowseToolWindow";
-
+static WCHAR *pszTitle = L"FSDirBrowseTool";
+static WCHAR *pszWindowClass = L"MainFrameWindow";
 static HINSTANCE hInst = NULL;
-
-HWND hWndMain = NULL;
-HWND hWndMDIClient = NULL;
+static HWND hWndMain = NULL;
+static HWND hWndMDIClient = NULL;
 static HWND hWndActiveMDIChild = NULL;
-#if 0
-static HWND hWndFocus = NULL;
-#endif
 static HMENU hMainMenu = NULL;
 static HMENU hMdiMenu = NULL;
 
 bool __initialize_phase = false;
-
-#if  _ENABLE_INITIALIZE_ASYNC_OPEN
-#define PM_OPEN_MDICHILD     (WM_APP+101)
-#endif
 
 HINSTANCE _GetResourceInstance()
 {
@@ -77,6 +66,81 @@ INT_PTR CALLBACK About(HWND hDlg, UINT message, WPARAM wParam, LPARAM lParam)
 
 /////////////////////////////////////////////////////////////////////////////////
 
+int
+CALLBACK
+BrowseCallbackProc(
+	HWND hwnd,
+	UINT uMsg,
+	LPARAM lParam,
+	LPARAM lpData
+	)
+{
+	switch(uMsg)
+	{
+		case BFFM_INITIALIZED:
+		{
+			if( lpData != 0 && (*(LPCTSTR)lpData) != _T('\0') )
+			{
+				SendMessage(hwnd,BFFM_SETSELECTION,TRUE,(LPARAM)lpData);
+			}
+			SetFocus(GetDlgItem(hwnd,100));
+			break;
+		}
+		case BFFM_SELCHANGED:
+		{
+			WCHAR szFolder[MAX_PATH];
+			if( SHGetPathFromIDList((LPCITEMIDLIST)lParam,szFolder) )
+			{
+				if( !PathIsDirectory(szFolder) )
+				{
+					SendMessage(hwnd,BFFM_ENABLEOK,0,0);
+				}
+			}
+			break;
+		}
+	}
+
+	return 0;
+}
+
+BOOL ChooseFolder(HWND hWnd,LPWSTR pszFolder,LPCWSTR pszCurrentFolder)
+{
+	LPITEMIDLIST pidl;
+
+	BROWSEINFO bi = {0};
+	WCHAR szDisplayName[MAX_PATH];
+	bi.hwndOwner = hWnd;
+	bi.ulFlags = BIF_DONTGOBELOWDOMAIN|
+				 BIF_RETURNONLYFSDIRS|
+				 BIF_NONEWFOLDERBUTTON|
+				 BIF_EDITBOX|
+				 BIF_NEWDIALOGSTYLE;
+
+	bi.pszDisplayName = szDisplayName;
+	bi.lpfn = BrowseCallbackProc;
+	bi.lParam = (LPARAM)pszCurrentFolder;
+	bi.lpszTitle = L"Choose Folder";
+
+	pidl = SHBrowseForFolder(&bi);
+
+	if( pidl == NULL )
+		return FALSE;
+
+	SHGetPathFromIDList(pidl,pszFolder);
+
+	ILFree(pidl);
+
+	if( !PathIsDirectory(pszFolder) )
+	{
+		MessageBeep(-1);
+		return FALSE;
+	}
+
+	return TRUE;
+}
+
+/////////////////////////////////////////////////////////////////////////////////
+
 //----------------------------------------------------------------------------
 //
 //  PathCheck()
@@ -88,7 +152,7 @@ BOOL PathCheck(PCWSTR pszPath)
 {
 	if( NtPathIsNtDevicePath(pszPath) )
 	{
-		CStringBuffer szRoot(MAX_PATH);
+		WCHAR szRoot[MAX_PATH];
 		
 		if( !NtPathGetRootDirectory(pszPath,szRoot,WIN32_MAX_PATH) )
 		{
@@ -138,7 +202,7 @@ HWND OpenMDIChild(HWND hWnd,PCWSTR pszPath)
 	else
 		mcp.pszInitialPath = NULL;
 
-	HWND hwndMDIChild = CreateMDIChildFrame(hWndMDIClient,NULL,(LPARAM)&mcp);
+	HWND hwndMDIChild = CreateMDIChildFrame(hWndMDIClient,NULL,(LPARAM)&mcp,FALSE);
 
 	if( hwndMDIChild )
 	{
@@ -151,11 +215,13 @@ HWND OpenMDIChild(HWND hWnd,PCWSTR pszPath)
 		MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndMDIChild,GWLP_USERDATA);
 		{
 			pd->hWndView = CreateDirectoryBrowseTool(hwndMDIChild);
-			InitDirectoryBrowseTool(pd->hWndView,mcp.pszInitialPath,NULL);
 
 			RECT rc;
 			GetClientRect(hwndMDIChild,&rc);
 			SetWindowPos(pd->hWndView,NULL,0,0,rc.right-rc.left,rc.bottom-rc.top,SWP_NOZORDER);
+
+			SendMessage(pd->hWndView,WM_CONTROL_MESSAGE,CTRL_SET_DIRECTORY,(LPARAM)mcp.pszInitialPath);
+			SendMessage(pd->hWndView,WM_CONTROL_MESSAGE,CTRL_INIT_LAYOUT,(LPARAM)&rc);
 		}
 	}
 
@@ -164,9 +230,9 @@ HWND OpenMDIChild(HWND hWnd,PCWSTR pszPath)
 
 //----------------------------------------------------------------------------
 //
-//  FUNCTION: RegisterMDIFrameClass()
+//  RegisterMDIFrameClass()
 //
-//  PURPOSE: Register main frame window class.
+//  PURPOSE:
 //
 //----------------------------------------------------------------------------
 ATOM RegisterMDIFrameClass(HINSTANCE hInstance)
@@ -212,6 +278,7 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 		return FALSE;
 	}
 
+	// Load MainFrame menu
 	hMainMenu = LoadMenu(_GetResourceInstance(),MAKEINTRESOURCE(IDR_MAINFRAME));
 	SetMenu(hWnd,hMainMenu);
 
@@ -224,9 +291,6 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 	{
 		for(int i = 1; i < __argc; i++)
 		{
-#if _ENABLE_INITIALIZE_ASYNC_OPEN
-			PostMessage(hWnd,PM_OPEN_MDICHILD,0,(LPARAM)__wargv[i]); // aync open
-#else
 			HWND hwndMDIChild;
 			hwndMDIChild = OpenMDIChild(hWnd,__wargv[i]);
 			if( hwndMDIChild )
@@ -236,27 +300,17 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 				//
 				SetWindowPos(hwndMDIChild,0,0,0,0,0,SWP_SHOWWINDOW|SWP_NOZORDER|SWP_NOMOVE|SWP_NOSIZE|SWP_FRAMECHANGED|SWP_DRAWFRAME);
 			}
-#endif
 		}
 	}
 
-
-#if !_ENABLE_INITIALIZE_ASYNC_OPEN
 	__initialize_phase = false;
-#endif
 
 	// Show frame window
 	ShowWindow(hWnd, nCmdShow);
 	UpdateWindow(hWnd);
 
 	// Set focus on active MDI child window.
-//	hWndActiveMDIChild = MDIGetActiveChild(hWndMDIClient);
-//	SetFocus( hWndActiveMDIChild );
-
-#if _ENABLE_INITIALIZE_ASYNC_OPEN
-	if( __argc > 1 )
-		PostMessage(hWnd,PM_OPEN_MDICHILD,0,0); // end of aync open
-#endif
+	hWndActiveMDIChild = MDIGetActiveChild(hWndMDIClient);
 
 	return hWnd;
 }
@@ -270,7 +324,10 @@ HWND InitInstance(HINSTANCE hInstance, int nCmdShow)
 //----------------------------------------------------------------------------
 VOID ExitInstance()
 {
-	;
+	if( hMainMenu )
+		DestroyMenu(hMainMenu);
+	if( hMdiMenu )
+		DestroyMenu(hMdiMenu);
 }
 
 //----------------------------------------------------------------------------
@@ -296,13 +353,83 @@ INT CALLBACK QueryCmdState(UINT CmdId,PVOID,LPARAM)
 	switch( CmdId )
 	{
 		case ID_FILE_NEW:
-		case ID_FILE_CLOSE:
+		case ID_FILE_OPEN:
+		case ID_FILE_CHOOSE_DIRECTORY:
 		case ID_ABOUT:
 		case ID_EXIT:
 			return UPDUI_ENABLED;
+		case ID_FILE_CLOSE:
+			if( hwndMDIChild != NULL )
+				return UPDUI_ENABLED;
+			break;
 	}
 
 	return UPDUI_DISABLED;
+}
+
+//----------------------------------------------------------------------------
+//
+//  OnFileNew()
+//
+//  PURPOSE: Open New MDI child window.
+//
+//----------------------------------------------------------------------------
+INT_PTR OnFileNew(HWND hWnd,UINT uCmdId,UINT codeNotify,HWND hwndCtl) 
+{
+	WCHAR szCurPath[MAX_PATH];
+	GetCurrentDirectory(MAX_PATH,szCurPath);
+
+	HWND hwndChild = OpenMDIChild(hWnd,szCurPath);
+	if( hwndChild )
+	{
+		MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndChild,GWLP_USERDATA);
+		SetFocus(pd->hWndView);
+	}
+	return 0;
+}
+
+//----------------------------------------------------------------------------
+//
+//  OnFileOpen()
+//
+//  PURPOSE: Open MDI child window with choose folder.
+//
+//----------------------------------------------------------------------------
+INT_PTR OnFileOpen(HWND hWnd,UINT uCmdId,UINT codeNotify,HWND hwndCtl) 
+{
+	WCHAR szFolder[MAX_PATH];
+	if( !ChooseFolder(hWnd,szFolder,NULL) )
+		return 0;
+
+	HWND hwndChild = OpenMDIChild(hWnd,szFolder);
+	if( hwndChild )
+	{
+		MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndChild,GWLP_USERDATA);
+		SetFocus(pd->hWndView);
+	}
+	return 0;
+}
+
+//----------------------------------------------------------------------------
+//
+//  OnFileChooseDirectory()
+//
+//  PURPOSE: Choose Directory.
+//
+//----------------------------------------------------------------------------
+INT_PTR OnFileChooseDirectory(HWND hWnd,UINT uCmdId,UINT codeNotify,HWND hwndCtl) 
+{
+	WCHAR szFolder[MAX_PATH];
+	if( ChooseFolder(hWnd,szFolder,NULL) )
+	{
+		HWND hwndMDIChild = MDIGetActiveChild(hWndMDIClient);
+		if( hwndMDIChild )
+		{
+			MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndMDIChild,GWLP_USERDATA);
+			SendMessage(pd->hWndView,WM_CONTROL_MESSAGE,CTRL_SET_DIRECTORY,(LPARAM)szFolder);
+		}
+	}
+	return 0;
 }
 
 //----------------------------------------------------------------------------
@@ -338,21 +465,20 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 		}
 		case WM_COMMAND:
 		{
-			int wmId, wmEvent;
-			wmId    = LOWORD(wParam);
-			wmEvent = HIWORD(wParam);
-			switch (wmId)
+			UINT uCmdId,uNotifyCode;
+			uCmdId      = LOWORD(wParam);
+			uNotifyCode = HIWORD(wParam);
+			switch(uCmdId)
 			{
 				case ID_FILE_NEW:
-				{
-					HWND hwndChild = OpenMDIChild(hWnd,NULL);
-					if( hwndChild )
-					{
-						MDICLIENTWNDDATA *pd = (MDICLIENTWNDDATA *)GetWindowLongPtr(hwndChild,GWLP_USERDATA);
-						SetFocus(pd->hWndView);
-					}
+					OnFileNew(hWnd,uCmdId,uNotifyCode,(HWND)lParam);
 					break;
-				}
+				case ID_FILE_OPEN:
+					OnFileOpen(hWnd,uCmdId,uNotifyCode,(HWND)lParam);
+					break;
+				case ID_FILE_CHOOSE_DIRECTORY:
+					OnFileChooseDirectory(hWnd,uCmdId,uNotifyCode,(HWND)lParam);
+					break;
 				case ID_FILE_CLOSE:
 					SendMessage(hWndMDIClient, WM_MDIDESTROY, (WPARAM)MDIGetActiveChild(hWndMDIClient), 0L); 
 					break;
@@ -384,18 +510,21 @@ LRESULT CALLBACK WndProc(HWND hWnd, UINT message, WPARAM wParam, LPARAM lParam)
 				SendMessage(hWndMDIClient,WM_MDISETMENU,(WPARAM)hMainMenu,0);
 				DrawMenuBar(hWnd);
 			}
+			else
+			{
+				SendMessage(hWndMDIClient,WM_MDISETMENU,(WPARAM)hMdiMenu,0);
+				DrawMenuBar(hWnd);
+			}
 			break;
 		}
-#if _ENABLE_INITIALIZE_ASYNC_OPEN
-		case PM_OPEN_MDICHILD:
+		case WM_INITMENUPOPUP:
 		{
-			if( lParam )
-				OpenMDIChild(hWnd,(PCWSTR)lParam);
-			else
-				__initialize_phase = false;
-			return 0;
+			INT RelativePosition = (INT)LOWORD(lParam);
+			INT WindowMenu = HIWORD(lParam);
+			if( !WindowMenu )
+				UpdateUI_MenuItem((HMENU)wParam,&QueryCmdState,0);
+			break;
 		}
-#endif
 	}
 
 	return DefFrameProc(hWnd, hWndMDIClient, message, wParam, lParam);
@@ -417,6 +546,10 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 	UNREFERENCED_PARAMETER(lpCmdLine);
 
 	_wsetlocale(LC_ALL,L"");
+
+	_MemInit();
+
+	SHFileIconInit(FALSE);
 
 	RegisterMDIFrameClass(hInstance);
 	RegisterMDIChildFrameClass(hInstance);
@@ -461,6 +594,8 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 	}
 
 	ExitInstance();
+
+	_MemEnd();
 
 	return (int) msg.wParam;
 }

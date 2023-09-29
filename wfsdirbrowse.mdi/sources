@@ -87,6 +87,7 @@ INCLUDES=$(INCLUDES);..\libntwdk
 #----------------------------------------------------------
 SOURCES = \
 	stdafx.cpp \
+	menu.cpp \
 	wfsdirbrowse.cpp \
 	mdichild.cpp \
 	wfsdirbrowse.rc
