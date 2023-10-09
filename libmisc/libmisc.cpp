@@ -477,22 +477,21 @@ _OpenByExplorerEx(
 }
 
 //
-// Win32 ListView Control Helper
+// Placeholder Compatibility Mode Funcsion
 //
 EXTERN_C
-BOOL
+CHAR
 WINAPI
-ListViewEx_AdjustWidthAllColumns(
-	HWND hwndLV,
-	UINT Flags
+SetProcessPlaceholderCompatibilityMode(
+	CHAR Mode
 	)
 {
-	HWND hwndHD = ListView_GetHeader(hwndLV);
-	int i,cHeaders = Header_GetItemCount(hwndHD);
-	int cx = Flags & 0x1 ? LVSCW_AUTOSIZE_USEHEADER : LVSCW_AUTOSIZE;
-	for(i = 0; i < cHeaders; i++)
+	CHAR (WINAPI *pfnRtlSetProcessPlaceholderCompatibilityMode)(CHAR Mode) = NULL;
+
+	(FARPROC&)pfnRtlSetProcessPlaceholderCompatibilityMode = GetProcAddress(GetModuleHandle(L"ntdll.dll"),"RtlSetProcessPlaceholderCompatibilityMode");
+	if( pfnRtlSetProcessPlaceholderCompatibilityMode )
 	{
-		ListView_SetColumnWidth(hwndLV,i,cx);
+		return pfnRtlSetProcessPlaceholderCompatibilityMode(2);
 	}
-	return TRUE;
+	return PHCM_ERROR_INVALID_PARAMETER;
 }

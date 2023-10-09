@@ -120,6 +120,16 @@ inline BOOL ListViewEx_ClearSelectAll(HWND hwndLV,BOOL bClearFocus=FALSE)
 	return ListViewEx_SetItemState(hwndLV,-1,0,LVIS_SELECTED|(bClearFocus ? LVNI_FOCUSED : 0));
 }
 
+inline VOID ListViewEx_AdjustWidthAllColumns(HWND hwndLV,BOOL UseHeader)
+{
+	int i,cHeaders = Header_GetItemCount(ListView_GetHeader(hwndLV));
+	int cx = UseHeader ? LVSCW_AUTOSIZE_USEHEADER : LVSCW_AUTOSIZE;
+	for(i = 0; i < cHeaders; i++)
+	{
+		ListView_SetColumnWidth(hwndLV,i,cx);
+	}
+}
+
 __forceinline int ListViewEx_GetCurSel(HWND hwndLV)
 {
 	return (int)ListView_GetNextItem(hwndLV,-1,LVNI_SELECTED|LVNI_FOCUSED);

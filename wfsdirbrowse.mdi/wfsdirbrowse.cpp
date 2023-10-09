@@ -23,6 +23,8 @@ static HWND hWndMDIClient = NULL;
 static HWND hWndActiveMDIChild = NULL;
 static HMENU hMainMenu = NULL;
 static HMENU hMdiMenu = NULL;
+static DWORD g_dwOSVersion = 0;
+static DWORD g_dwOSBuildNumber = 0;
 
 bool __initialize_phase = false;
 
@@ -34,6 +36,21 @@ HINSTANCE _GetResourceInstance()
 HWND _GetMainWnd()
 {
 	return hWndMain;
+}
+
+DWORD _GetOSVersion()
+{
+	return g_dwOSVersion;
+}
+
+VOID InitOSVersion()
+{
+	OSVERSIONINFOEX osi = {0};
+	osi.dwOSVersionInfoSize = sizeof(osi);
+	GetVersionEx((LPOSVERSIONINFO)&osi);
+
+	g_dwOSVersion = (ULONG)MAKEWORD(osi.dwMinorVersion,osi.dwMajorVersion);
+	g_dwOSBuildNumber = osi.dwBuildNumber;
 }
 
 /////////////////////////////////////////////////////////////////////////////////
@@ -548,6 +565,13 @@ int APIENTRY _tWinMain(HINSTANCE hInstance,
 	_wsetlocale(LC_ALL,L"");
 
 	_MemInit();
+
+	InitOSVersion();
+
+	if( _GetOSVersion() >= 0xA00 )
+	{
+		SetProcessPlaceholderCompatibilityMode(PHCM_EXPOSE_PLACEHOLDERS);
+	}
 
 	SHFileIconInit(FALSE);
 

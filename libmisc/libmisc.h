@@ -244,14 +244,20 @@ SetClipboardTextFromListViewColumn(
 	);
 
 //
-// Win32 ListView Control Helper
+// Placeholder Compatibility Mode Funcsion
 //
+#define PHCM_APPLICATION_DEFAULT 	0
+#define PHCM_DISGUISE_PLACEHOLDER 	1
+#define PHCM_EXPOSE_PLACEHOLDERS 	2
+#define PHCM_MAX 	                2
+#define PHCM_ERROR_INVALID_PARAMETER  (-1)
+#define PHCM_ERROR_NO_TEB             (-2)
+
 EXTERN_C
-BOOL
+CHAR
 WINAPI
-ListViewEx_AdjustWidthAllColumns(
-	HWND hwndLV,
-	UINT Flags
+SetProcessPlaceholderCompatibilityMode(
+	CHAR Mode
 	);
 
 //

@@ -234,29 +234,29 @@ NTSTATUS
 NTAPI
 GetVolumeFsInformation(
     IN HANDLE Handle,
-    IN FILEFS_INFORMATION_CLASS InfoClass,
+    IN VOLFS_INFORMATION_CLASS InfoClass,
     OUT PVOID *Buffer
     )
 {
 	NTSTATUS Status;
     switch( InfoClass )
     {
-        case FILEFS_VOLUME_INFORMATION:
+        case VOLFS_VOLUME_INFORMATION:
         {
             *Buffer = AllocAndGetInformaion( Handle, FileFsVolumeInformation, Status );
             break;
         }
-        case FILEFS_SIZE_INFORMATION:
+        case VOLFS_SIZE_INFORMATION:
         {
             *Buffer = AllocAndGetInformaion( Handle, FileFsSizeInformation, Status );
             break;
         }
-        case FILEFS_ATTRIBUTE_INFORMATION:
+        case VOLFS_ATTRIBUTE_INFORMATION:
         {
             *Buffer = AllocAndGetInformaion( Handle, FileFsAttributeInformation, Status );
             break;
         }
-        case FILEFS_SECTORSIZE_INFORMATION:
+        case VOLFS_SECTORSIZE_INFORMATION:
         {
             *Buffer = AllocAndGetInformaion( Handle, FileFsSectorSizeInformation, Status );
             break;
